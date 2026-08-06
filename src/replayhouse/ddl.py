@@ -5,7 +5,7 @@ import re
 
 from .errors import SchemaError
 
-RESERVED_COLUMNS = ("id", "inserted_at")
+RESERVED_COLUMNS = ("id", "inserted_at", "priority")
 EVICTION_POLICIES = ("fifo", "lowest_priority")
 _NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SIZE_RE = re.compile(r"^\s*([\d.]+)\s*(B|KiB|MiB|GiB|TiB)\s*$")

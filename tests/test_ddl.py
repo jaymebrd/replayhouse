@@ -49,6 +49,14 @@ def test_create_rejects_reserved_and_bad_columns(store):
         store.create("t3", columns={"x": "UInt32"}, eviction="random")
 
 
+def test_create_rejects_priority_column(store):
+    # "priority" is reserved: ReplayTable.insert unconditionally pops it into
+    # the sidecar table, so a user payload column of that name would silently
+    # never be populated.
+    with pytest.raises(SchemaError):
+        store.create("t4", columns={"priority": "Float32"})
+
+
 def test_drop_removes_both_tables(store):
     store.create("gone", columns={"x": "UInt32"})
     store.drop("gone")

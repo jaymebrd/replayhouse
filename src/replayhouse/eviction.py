@@ -31,6 +31,12 @@ def _delete_sidecar_orphans(backend, name: str) -> None:
 
 def evict(backend, name: str) -> dict:
     cfg = load_config(backend, name)
+    # Sidecar orphans (rows whose main-table id has already been deleted, e.g. by
+    # TTL expiry) must be cleaned on every call, not only when eviction actually
+    # runs below. Otherwise they accumulate forever and waste LIMIT slots in the
+    # phase-1 sampling query, causing `sample(k)` to silently return fewer than
+    # k rows.
+    _delete_sidecar_orphans(backend, name)
     rows_before, bytes_before = table_stats(backend, name)
     if not _over(rows_before, bytes_before, cfg):
         return {"rows_before": rows_before, "rows_after": rows_before}
