@@ -1,8 +1,8 @@
-# replay-store
+# replayhouse
 
 An agentic experience store with native weighted sampling, built on ClickHouse.
 
-ReplayStore is a thin Python client that turns ClickHouse (a server, or
+ReplayHouse is a thin Python client that turns ClickHouse (a server, or
 embedded [chdb](https://github.com/chdb-io/chdb) with zero infrastructure)
 into a replay buffer for LLM/agent post-training — in the spirit of DeepMind
 Reverb, but designed for agentic workloads:
@@ -16,4 +16,4 @@ Reverb, but designed for agentic workloads:
   trainer, dashboards, and debugging queries.
 
 Status: design phase. See the
-[design doc](docs/superpowers/specs/2026-08-06-replay-store-design.md).
+[design doc](docs/superpowers/specs/2026-08-06-replayhouse-design.md).

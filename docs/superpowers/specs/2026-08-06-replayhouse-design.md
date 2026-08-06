@@ -1,12 +1,12 @@
-# ReplayStore: an agentic experience store with native weighted sampling
+# ReplayHouse: an agentic experience store with native weighted sampling
 
 Date: 2026-08-06
 Status: draft for review
 
 ## Summary
 
-ReplayStore is a Python package (working name: `replay-store` on PyPI, module
-`replay_store`) that turns ClickHouse into an experience replay store for
+ReplayHouse is a Python package (`replayhouse` on PyPI, module
+`replayhouse`) that turns ClickHouse into an experience replay store for
 LLM/agent post-training, in the spirit of DeepMind Reverb but built for
 agentic workloads: large variable-length trajectories, batch-shaped
 prioritized sampling fused with analytical filters, and a single store that
@@ -65,10 +65,10 @@ Arrow/PyTorch adapter. ClickHouse does all the heavy lifting.
 
 ### Backends
 
-- `ReplayStore.connect("clickhouse://host:8123/db")` — server mode via
+- `ReplayHouse.connect("clickhouse://host:8123/db")` — server mode via
   `clickhouse-connect` (required dependency).
-- `ReplayStore.connect("chdb:///path/to/dir")` — embedded mode via `chdb`
-  (optional extra: `pip install replay-store[embedded]`). Single-process
+- `ReplayHouse.connect("chdb:///path/to/dir")` — embedded mode via `chdb`
+  (optional extra: `pip install replayhouse[embedded]`). Single-process
   only; documented as the laptop/prototyping mode and used for CI tests.
 
 Both backends speak identical SQL through an internal `Backend` protocol:
@@ -218,9 +218,9 @@ Eviction never runs implicitly inside `insert()` or `sample()`.
 ## Python API surface
 
 ```python
-from replay_store import ReplayStore
+from replayhouse import ReplayHouse
 
-store = ReplayStore.connect("clickhouse://host:8123/db")   # or "chdb:///dir"
+store = ReplayHouse.connect("clickhouse://host:8123/db")   # or "chdb:///dir"
 
 store.create(
     "agent_experiences",
@@ -256,22 +256,22 @@ t.evict()
 t.compact()
 
 # PyTorch integration
-from replay_store.torch import ReplayIterableDataset
+from replayhouse.torch import ReplayIterableDataset
 ds = ReplayIterableDataset(t, batch_size=8192, by="advantage",
                            where="env_version >= 12")
 ```
 
-Errors surface as `ReplayStoreError` subclasses (`SchemaError`,
+Errors surface as `ReplayHouseError` subclasses (`SchemaError`,
 `BackendError`); SQL injected via `where=`/`by=` is documented as trusted
 input (this is a database client, not a sandbox).
 
 ## Package layout
 
 ```
-replay-store/
+replayhouse/
   pyproject.toml            # deps: clickhouse-connect, pyarrow; extras: embedded (chdb), torch
-  src/replay_store/
-    __init__.py             # ReplayStore, ReplayTable, SampleBatch
+  src/replayhouse/
+    __init__.py             # ReplayHouse, ReplayTable, SampleBatch
     backend.py              # Backend protocol; ClickHouseBackend, ChdbBackend
     ddl.py                  # create/drop, schema introspection
     sampling.py             # two-phase query builder
