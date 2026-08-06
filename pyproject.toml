@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "replayhouse"
+version = "0.1.0"
+description = "An agentic experience store with native weighted sampling, built on ClickHouse"
+requires-python = ">=3.10"
+dependencies = ["clickhouse-connect>=0.8", "pyarrow>=15"]
+
+[project.optional-dependencies]
+embedded = ["chdb>=3.0"]
+dev = ["pytest>=8", "pandas>=2", "chdb>=3.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "tests_integration"]
+markers = ["integration: requires a running ClickHouse server (set REPLAYHOUSE_TEST_URL)"]
