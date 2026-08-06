@@ -6,7 +6,7 @@ from typing import Any
 
 import pyarrow as pa
 
-from . import priorities
+from . import eviction, priorities
 from .backend import Backend
 from ._ids import uuid7
 from .ddl import sidecar_name, validate_name
@@ -92,3 +92,6 @@ class ReplayTable:
 
     def compact(self) -> None:
         priorities.compact(self._backend, self._sidecar)
+
+    def evict(self) -> dict:
+        return eviction.evict(self._backend, self.name)
