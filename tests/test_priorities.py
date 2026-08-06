@@ -1,5 +1,6 @@
 import pytest
 
+from replayhouse import priorities
 from replayhouse.errors import SchemaError
 from tests.conftest import make_rows
 
@@ -44,3 +45,13 @@ def test_compact_collapses_versions(store, table):
     table.compact()
     assert _sidecar_count(store) == 100
     assert set(_current(store).values()) == {3.0}
+
+
+def test_compact_validates_sidecar(store):
+    with pytest.raises(SchemaError):
+        priorities.compact(store._backend, "bad`name")
+
+
+def test_update_priorities_validates_sidecar(store):
+    with pytest.raises(SchemaError):
+        priorities.update_priorities(store._backend, "bad`name", [], [])
