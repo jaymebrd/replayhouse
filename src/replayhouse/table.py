@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass, field
 from typing import Any
+
+import pyarrow as pa
 
 from .backend import Backend
 from ._ids import uuid7
 from .ddl import sidecar_name
 from .errors import SchemaError
+from .sampling import fetch_sql, phase1_sql
 
 
 def _normalize_rows(rows) -> list[dict[str, Any]]:
@@ -19,6 +23,23 @@ def _normalize_rows(rows) -> list[dict[str, Any]]:
     if hasattr(rows, "to_dict"):          # pandas.DataFrame
         return rows.to_dict("records")
     raise SchemaError(f"unsupported rows type: {type(rows).__name__}")
+
+
+@dataclass
+class SampleBatch:
+    ids: list[str] = field(default_factory=list)
+    rows: list[dict] = field(default_factory=list)
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def to_arrow(self) -> pa.Table:
+        return pa.Table.from_pylist(self.rows)
+
+    def to_pandas(self):
+        import pandas
+
+        return pandas.DataFrame(self.rows)
 
 
 class ReplayTable:
@@ -42,3 +63,14 @@ class ReplayTable:
         self._backend.insert_rows(self.name, main)
         self._backend.insert_rows(self._sidecar, prios)
         return [r["id"] for r in main]
+
+    def sample(self, k: int, *, by: str = "priority", where: str | None = None,
+               stratify_by: str | None = None) -> SampleBatch:
+        if stratify_by is not None:
+            raise NotImplementedError("stratified sampling arrives in Task 7")
+        chosen = self._backend.query_rows(phase1_sql(self.name, k, by=by, where=where))
+        ids = [r["id"] for r in chosen]
+        if not ids:
+            return SampleBatch()
+        rows = self._backend.query_rows(fetch_sql(self.name, ids))
+        return SampleBatch(ids=[r["id"] for r in rows], rows=rows)

@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+import re
+
+from .ddl import sidecar_name, validate_name
+from .errors import SchemaError
+
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_PRIORITY_WORD = re.compile(r"\bpriority\b")
+
+_CURRENT_CTE = (
+    "WITH current AS\n(\n"
+    "    SELECT id, argMax(priority, version) AS priority\n"
+    "    FROM `{sidecar}`\n    GROUP BY id\n)\n"
+)
+
+
+def sample_key(by: str) -> str:
+    return f"-log(1 - randCanonical()) / ({by})"
+
+
+def phase1_sql(name: str, k: int, by: str = "priority", where: str | None = None) -> str:
+    validate_name(name)
+    k = int(k)
+    sidecar = sidecar_name(name)
+    if by.strip() == "priority":
+        filt = f"\n  AND id IN (SELECT id FROM `{name}` WHERE ({where}))" if where else ""
+        return (
+            _CURRENT_CTE.format(sidecar=sidecar)
+            + f"SELECT id\nFROM current\nWHERE priority > 0{filt}\n"
+            + f"ORDER BY {sample_key('priority')} ASC\nLIMIT {k}"
+        )
+    cond = f"(({by})) > 0" + (f" AND (({where}))" if where else "")
+    order = f"ORDER BY {sample_key(f'({by})')} ASC\nLIMIT {k}"
+    if _PRIORITY_WORD.search(by):
+        return (
+            _CURRENT_CTE.format(sidecar=sidecar)
+            + f"SELECT m.id AS id\nFROM `{name}` AS m\n"
+            + f"INNER JOIN current AS c ON m.id = c.id\nWHERE {cond}\n{order}"
+        )
+    return f"SELECT id\nFROM `{name}`\nWHERE {cond}\n{order}"
+
+
+def validate_ids(ids: list[str]) -> list[str]:
+    for i in ids:
+        if not _UUID_RE.match(str(i)):
+            raise SchemaError(f"not a UUID: {i!r}")
+    return list(ids)
+
+
+def fetch_sql(name: str, ids: list[str]) -> str:
+    validate_name(name)
+    id_list = ", ".join(f"'{i}'" for i in validate_ids(ids))
+    return f"SELECT * FROM `{name}` WHERE id IN ({id_list})"
