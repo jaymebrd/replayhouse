@@ -17,3 +17,36 @@ Reverb, but designed for agentic workloads:
 
 Status: design phase. See the
 [design doc](docs/superpowers/specs/2026-08-06-replayhouse-design.md).
+
+## Quick start {#quick-start}
+
+```bash
+pip install replayhouse[embedded]      # embedded chdb, zero infrastructure
+```
+
+```python
+import replayhouse
+
+store = replayhouse.connect("chdb:///tmp/replay")      # or "clickhouse://host:8123/db"
+
+t = store.create(
+    "agent_experiences",
+    columns={
+        "task_family": "LowCardinality(String)",
+        "env_version": "UInt32",
+        "steps": "JSON",
+        "reward": "Float32",
+    },
+    ttl_days=30,
+    capacity_rows=10_000_000,
+    eviction="lowest_priority",
+)
+
+t.insert([{"task_family": "web", "env_version": 1,
+           "steps": {"tool_calls": []}, "reward": 0.7, "priority": 2.0}])
+
+batch = t.sample(8192, by="priority", where="env_version >= 1",
+                 stratify_by="task_family")
+t.update_priorities(batch.ids, [0.5] * len(batch))
+t.evict()
+```
