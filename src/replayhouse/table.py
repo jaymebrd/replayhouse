@@ -11,7 +11,7 @@ from .backend import Backend
 from ._ids import uuid7
 from .ddl import sidecar_name
 from .errors import SchemaError
-from .sampling import fetch_sql, phase1_sql
+from .sampling import fetch_sql, phase1_sql, stratified_sql
 
 
 def _normalize_rows(rows) -> list[dict[str, Any]]:
@@ -68,8 +68,18 @@ class ReplayTable:
     def sample(self, k: int, *, by: str = "priority", where: str | None = None,
                stratify_by: str | None = None) -> SampleBatch:
         if stratify_by is not None:
-            raise NotImplementedError("stratified sampling arrives in Task 7")
-        chosen = self._backend.query_rows(phase1_sql(self.name, k, by=by, where=where))
+            where_sql = f" WHERE ({where})" if where else ""
+            g_rows = self._backend.query_rows(
+                f"SELECT uniqExact(`{stratify_by}`) AS g FROM `{self.name}`{where_sql}"
+            )
+            groups = int(g_rows[0]["g"]) if g_rows else 0
+            if groups == 0:
+                return SampleBatch()
+            per_group = max(1, int(k) // groups)
+            sql = stratified_sql(self.name, k, per_group, stratify_by, by=by, where=where)
+            chosen = self._backend.query_rows(sql)
+        else:
+            chosen = self._backend.query_rows(phase1_sql(self.name, k, by=by, where=where))
         ids = [r["id"] for r in chosen]
         if not ids:
             return SampleBatch()
