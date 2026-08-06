@@ -9,7 +9,7 @@ import pyarrow as pa
 from . import priorities
 from .backend import Backend
 from ._ids import uuid7
-from .ddl import sidecar_name
+from .ddl import sidecar_name, validate_name
 from .errors import SchemaError
 from .sampling import fetch_sql, phase1_sql, stratified_sql
 
@@ -68,6 +68,7 @@ class ReplayTable:
     def sample(self, k: int, *, by: str = "priority", where: str | None = None,
                stratify_by: str | None = None) -> SampleBatch:
         if stratify_by is not None:
+            validate_name(stratify_by)
             where_sql = f" WHERE ({where})" if where else ""
             g_rows = self._backend.query_rows(
                 f"SELECT uniqExact(`{stratify_by}`) AS g FROM `{self.name}`{where_sql}"

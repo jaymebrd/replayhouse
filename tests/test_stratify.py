@@ -1,5 +1,8 @@
 from collections import Counter
 
+import pytest
+
+from replayhouse.errors import SchemaError
 from tests.conftest import make_rows
 
 
@@ -36,3 +39,8 @@ def test_stratified_empty_filter_returns_empty(table):
     table.insert(make_rows(5))
     batch = table.sample(10, stratify_by="task_family", where="env_version = 999")
     assert len(batch) == 0
+
+
+def test_stratified_rejects_injection(table):
+    with pytest.raises(SchemaError):
+        table.sample(10, stratify_by="bad`col")
