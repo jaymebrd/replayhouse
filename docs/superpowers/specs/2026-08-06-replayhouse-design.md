@@ -105,8 +105,11 @@ PARTITION BY toStartOfDay(inserted_at)
 TTL inserted_at + INTERVAL 30 DAY    -- if ttl is configured
 ```
 
-`generateUUIDv7` keeps ids time-ordered so primary-key fetches of a sampled
-batch touch few parts. Day partitions make FIFO capacity eviction a cheap
+Ids are UUIDv7, generated client-side. Correction from implementation
+review: ClickHouse orders `UUID` columns by the second 64-bit half, so
+`ORDER BY id` gives no time-locality for UUIDv7 values — primary-key point
+lookups work fine, but no part-locality benefit should be assumed (or
+benchmarked for in M4). Day partitions make FIFO capacity eviction a cheap
 `DROP PARTITION`.
 
 ### Priority sidecar `<name>__priorities` (narrow, hot)
