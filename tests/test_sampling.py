@@ -83,3 +83,12 @@ def test_sample_weights_are_honored_statistically(table):
 def test_empty_table_returns_empty_batch(table):
     batch = table.sample(10)
     assert len(batch) == 0 and batch.ids == [] and batch.to_arrow().num_rows == 0
+
+
+def test_sample_large_k_does_not_exceed_query_size(table):
+    # 8192 quoted UUIDs inline in one IN (...) is ~310KB of SQL, over
+    # ClickHouse's default 256KB max_query_size; the fetch must chunk.
+    table.insert(make_rows(8000))
+    batch = table.sample(8000)
+    assert len(batch) == 8000
+    assert len(set(batch.ids)) == 8000

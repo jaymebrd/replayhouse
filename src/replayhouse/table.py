@@ -13,6 +13,9 @@ from .ddl import sidecar_name, validate_name
 from .errors import SchemaError
 from .sampling import fetch_sql, phase1_sql, stratified_sql
 
+# 4000 quoted UUIDs ≈ 156KB of SQL, safely under the 256KB default.
+_FETCH_CHUNK = 4000
+
 
 def _normalize_rows(rows) -> list[dict[str, Any]]:
     if isinstance(rows, list):
@@ -84,7 +87,11 @@ class ReplayTable:
         ids = [r["id"] for r in chosen]
         if not ids:
             return SampleBatch()
-        rows = self._backend.query_rows(fetch_sql(self.name, ids))
+        # Chunk the id list: 8k inline UUIDs is ~310KB of SQL, over
+        # ClickHouse's default 256KB max_query_size.
+        rows = []
+        for i in range(0, len(ids), _FETCH_CHUNK):
+            rows.extend(self._backend.query_rows(fetch_sql(self.name, ids[i:i + _FETCH_CHUNK])))
         return SampleBatch(ids=[r["id"] for r in rows], rows=rows)
 
     def update_priorities(self, ids, values) -> None:
