@@ -6,6 +6,7 @@ from typing import Any
 
 import pyarrow as pa
 
+from . import priorities
 from .backend import Backend
 from ._ids import uuid7
 from .ddl import sidecar_name
@@ -74,3 +75,9 @@ class ReplayTable:
             return SampleBatch()
         rows = self._backend.query_rows(fetch_sql(self.name, ids))
         return SampleBatch(ids=[r["id"] for r in rows], rows=rows)
+
+    def update_priorities(self, ids, values) -> None:
+        priorities.update_priorities(self._backend, self._sidecar, ids, values)
+
+    def compact(self) -> None:
+        priorities.compact(self._backend, self._sidecar)
