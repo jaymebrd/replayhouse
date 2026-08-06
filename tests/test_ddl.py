@@ -57,3 +57,19 @@ def test_drop_removes_both_tables(store):
         "WHERE database = currentDatabase() AND name LIKE 'gone%'"
     )[0]["c"]
     assert int(n) == 0
+
+
+def test_create_rolls_back_main_table_on_sidecar_failure(store):
+    # Pre-create a conflicting sidecar to force sidecar creation to fail
+    store._backend.command("CREATE TABLE conflicted__priorities (x UInt8) ENGINE = MergeTree ORDER BY x")
+
+    # Attempt to create a table with the same name; should fail
+    with pytest.raises(Exception):
+        store.create("conflicted", columns={"x": "UInt32"})
+
+    # Verify the main table was rolled back and does NOT exist
+    n = store._backend.query_rows(
+        "SELECT count() AS c FROM system.tables "
+        "WHERE database = currentDatabase() AND name = 'conflicted'"
+    )[0]["c"]
+    assert int(n) == 0

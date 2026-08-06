@@ -19,7 +19,12 @@ class ReplayHouse:
             capacity_bytes=capacity_bytes, capacity_rows=capacity_rows, eviction=eviction
         )
         self._backend.command(ddl.main_table_ddl(name, columns, ttl_days, config))
-        self._backend.command(ddl.sidecar_ddl(name))
+        try:
+            self._backend.command(ddl.sidecar_ddl(name))
+        except Exception:
+            # Roll back the main table if sidecar creation fails
+            self._backend.command(f"DROP TABLE IF EXISTS `{name}`")
+            raise
         return self.table(name)
 
     def table(self, name: str) -> ReplayTable:
