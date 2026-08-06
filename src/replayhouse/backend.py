@@ -102,20 +102,31 @@ class ClickHouseBackend:
         except Exception as e:
             raise BackendError(str(e)) from e
 
+    def _wrap_call(self, fn):
+        """Wrap a client call to convert exceptions to BackendError."""
+        try:
+            return fn()
+        except Exception as e:
+            raise BackendError(str(e)) from e
+
     def query_arrow(self, sql: str) -> pa.Table:
-        return self._client.query_arrow(sql)
+        return self._wrap_call(lambda: self._client.query_arrow(sql))
 
     def query_rows(self, sql: str) -> list[dict[str, Any]]:
-        raw = self._client.raw_query(sql, fmt="JSONEachRow")
-        return [json.loads(line) for line in raw.decode().splitlines() if line.strip()]
+        def _query():
+            raw = self._client.raw_query(sql, fmt="JSONEachRow")
+            return [json.loads(line) for line in raw.decode().splitlines() if line.strip()]
+        return self._wrap_call(_query)
 
     def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> None:
         if not rows:
             return
-        self._client.raw_insert(f"`{table}`", insert_block=_ndjson(rows), fmt="JSONEachRow")
+        self._wrap_call(lambda: self._client.raw_insert(
+            f"`{table}`", insert_block=_ndjson(rows), fmt="JSONEachRow"
+        ))
 
     def command(self, sql: str) -> None:
-        self._client.command(sql)
+        self._wrap_call(lambda: self._client.command(sql))
 
     def close(self) -> None:
         self._client.close()

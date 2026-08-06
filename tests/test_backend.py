@@ -59,3 +59,49 @@ def test_chdb_insert_empty_is_noop(backend):
 def test_chdb_bad_sql_raises(backend):
     with pytest.raises(BackendError):
         backend.query_rows("SELECT nonsense FROM nowhere")
+
+
+def test_backend_from_url_returns_chdb_backend():
+    """Test that backend_from_url returns a ChdbBackend for chdb URLs."""
+    from replayhouse.backend import backend_from_url
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        b = backend_from_url(f"chdb:///{tmpdir}/db")
+        assert isinstance(b, ChdbBackend)
+        b.close()
+
+
+def test_clickhouse_backend_wraps_query_errors():
+    """Test that ClickHouseBackend wraps driver exceptions in BackendError."""
+    from replayhouse.backend import ClickHouseBackend
+
+    # Create a ClickHouseBackend instance without calling __init__
+    backend = ClickHouseBackend.__new__(ClickHouseBackend)
+
+    # Create a fake client that raises RuntimeError
+    class FakeClient:
+        def query_arrow(self, sql):
+            raise RuntimeError("fake error: query_arrow")
+        def raw_query(self, sql, fmt=None):
+            raise RuntimeError("fake error: raw_query")
+        def raw_insert(self, table, insert_block=None, fmt=None):
+            raise RuntimeError("fake error: raw_insert")
+        def command(self, sql):
+            raise RuntimeError("fake error: command")
+        def close(self):
+            pass
+
+    backend._client = FakeClient()
+
+    # Test that each method wraps the error in BackendError
+    with pytest.raises(BackendError):
+        backend.query_arrow("SELECT 1")
+
+    with pytest.raises(BackendError):
+        backend.query_rows("SELECT 1")
+
+    with pytest.raises(BackendError):
+        backend.insert_rows("t", [{"x": 1}])
+
+    with pytest.raises(BackendError):
+        backend.command("CREATE TABLE t (x UInt32)")
