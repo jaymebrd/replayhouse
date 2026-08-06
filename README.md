@@ -49,4 +49,26 @@ batch = t.sample(8192, by="priority", where="env_version >= 1",
                  stratify_by="task_family")
 t.update_priorities(batch.ids, [0.5] * len(batch))
 t.evict()
+
+## Training with PyTorch {#training-with-pytorch}
+
+```bash
+pip install 'replayhouse[embedded,torch]'
+```
+
+```python
+from replayhouse.torch import ReplayIterableDataset
+from torch.utils.data import DataLoader
+
+ds = ReplayIterableDataset(t, batch_size=8192, by="priority",
+                           where="env_version >= 12")
+for batch in DataLoader(ds, batch_size=None, num_workers=0):
+    loss, new_priorities = train_step(batch.rows)
+    t.update_priorities(batch.ids, new_priorities)
+```
+
+Each item is a whole `SampleBatch` (the store does the batching) — keep
+`batch_size=None` and `num_workers=0` in the `DataLoader`. Runnable demos:
+[`examples/bandit.py`](examples/bandit.py) and
+[`examples/train_reward_model.py`](examples/train_reward_model.py).
 ```
