@@ -37,3 +37,34 @@ granule-weight hierarchical sampling idea earns its complexity only past
 ~500M rows or under high concurrent sampling QPS. Until then: compact on a
 cadence, prefer `by=` main-column mode when priorities live in the payload,
 and keep filters narrow.
+
+# Sidecar dedup variants: argMaxState vs FINAL (2026-08-07)
+
+Same environment. `k = 8192` weighted draws over a priority sidecar at
+10M/50M ids, compacted and 3x-bloated (two extra versions per id).
+Run: `.venv/bin/python benchmarks/bench_sidecar_variants.py`.
+
+| variant | 10M compact | 50M compact | 10M bloat3x | 50M bloat3x |
+|---|---|---|---|---|
+| A `argMax` GROUP BY (current) | 83ms | 428ms | 196ms | 2488ms |
+| B `AggregatingMergeTree` + `argMaxMerge` | 89ms | 531ms | 261ms | 3321ms |
+| C `ReplacingMergeTree` + `FINAL` | 18ms | 62ms | 89ms | 404ms |
+| D raw scan, compacted (floor) | 21ms | 76ms | — | — |
+
+## Findings
+
+1. **The `argMaxState` hypothesis is falsified.** `argMaxMerge` still runs a
+   hash aggregation over every id at read time; the aggregate states only
+   add per-row overhead (~1.2x slower than the current design in every
+   cell). No schema change to `AggregatingMergeTree` is warranted.
+2. **`FINAL` is the winner, by a lot.** Modern ClickHouse executes `FINAL`
+   on `ReplacingMergeTree` as a parallel merge-sorted dedup over the
+   `ORDER BY id` key — no hash table — landing at the raw-scan floor when
+   compacted (62ms vs 76ms at 50M) and ~6-7x faster than the current
+   `argMax` read in every state (428→62ms compacted, 2488→404ms bloated
+   at 50M).
+3. **Consequence:** the improvement is a *query* change, not a schema
+   change — phase-1 sampling should read `FROM <sidecar> FINAL` instead of
+   the `argMax(priority, version) GROUP BY id` CTE. Semantics are identical
+   (`ReplacingMergeTree(version)` keeps the max-version row). Planned as a
+   follow-up library change with the full test suite as the semantic gate.
