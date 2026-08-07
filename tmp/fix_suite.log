@@ -1,0 +1,17 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/jaymebird/source/replayhouse
+configfile: pyproject.toml
+collected 56 items
+
+tests/test_backend.py ..........                                         [ 17%]
+tests/test_ddl.py .......                                                [ 30%]
+tests/test_end_to_end.py ..                                              [ 33%]
+tests/test_eviction.py ......                                            [ 44%]
+tests/test_ids.py ..                                                     [ 48%]
+tests/test_insert.py .....                                               [ 57%]
+tests/test_priorities.py ......                                          [ 67%]
+tests/test_sampling.py .............                                     [ 91%]
+tests/test_stratify.py .....                                             [100%]
+
+============================== 56 passed in 2.72s ==============================

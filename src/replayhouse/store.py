@@ -16,6 +16,13 @@ class ReplayHouse:
 
     def create(self, name, columns, *, ttl_days=None, capacity_bytes=None,
                capacity_rows=None, eviction="fifo", exists_ok: bool = False) -> ReplayTable:
+        """Create a store: a main table plus its priority sidecar.
+
+        If the table already exists: raises TableExistsError by default;
+        with exists_ok=True, opens and returns the existing table AS-IS —
+        columns, ttl_days, capacity and eviction arguments are all ignored
+        (no schema comparison is performed).
+        """
         ddl.validate_name(name)
         existing = self._backend.query_rows(
             f"SELECT count() AS c FROM system.tables "

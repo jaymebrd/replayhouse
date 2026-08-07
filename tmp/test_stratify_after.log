@@ -1,0 +1,13 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /Users/jaymebird/source/replayhouse/.venv/bin/python3.14
+cachedir: .pytest_cache
+rootdir: /Users/jaymebird/source/replayhouse
+configfile: pyproject.toml
+collecting ... collected 4 items
+
+tests/test_stratify.py::test_stratified_even_coverage_across_skewed_groups PASSED [ 25%]
+tests/test_stratify.py::test_stratified_respects_where PASSED            [ 50%]
+tests/test_stratify.py::test_stratified_by_main_column PASSED            [ 75%]
+tests/test_stratify.py::test_stratified_empty_filter_returns_empty PASSED [100%]
+
+============================== 4 passed in 0.37s ===============================

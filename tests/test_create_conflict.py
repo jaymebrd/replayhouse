@@ -1,7 +1,6 @@
 import pytest
 
 from replayhouse import TableExistsError
-from tests.conftest import make_rows
 
 
 def test_create_twice_raises_typed_error(store):

@@ -1,0 +1,70 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /Users/jaymebird/source/replayhouse/.venv/bin/python3.14
+cachedir: .pytest_cache
+rootdir: /Users/jaymebird/source/replayhouse
+configfile: pyproject.toml
+collecting ... collected 4 items
+
+tests/test_eviction.py::test_evict_noop_without_capacity FAILED          [ 25%]
+tests/test_eviction.py::test_fifo_drops_oldest_partitions FAILED         [ 50%]
+tests/test_eviction.py::test_fifo_never_drops_last_partition FAILED      [ 75%]
+tests/test_eviction.py::test_lowest_priority_deletes_bottom_rows FAILED  [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_evict_noop_without_capacity _______________________
+
+store = <replayhouse.store.ReplayHouse object at 0x10abca900>
+
+    def test_evict_noop_without_capacity(store):
+        t = _mk(store)
+        t.insert(make_rows(10))
+>       r = t.evict()
+            ^^^^^^^
+E       AttributeError: 'ReplayTable' object has no attribute 'evict'
+
+tests/test_eviction.py:17: AttributeError
+______________________ test_fifo_drops_oldest_partitions _______________________
+
+store = <replayhouse.store.ReplayHouse object at 0x10ac25450>
+
+    def test_fifo_drops_oldest_partitions(store):
+        t = _mk(store, capacity_rows=130, eviction="fifo")
+        t.insert(make_rows(60, inserted_at="2026-08-04 10:00:00"))
+        t.insert(make_rows(60, inserted_at="2026-08-05 10:00:00"))
+        t.insert(make_rows(60, inserted_at="2026-08-06 10:00:00"))
+>       r = t.evict()
+            ^^^^^^^
+E       AttributeError: 'ReplayTable' object has no attribute 'evict'
+
+tests/test_eviction.py:26: AttributeError
+_____________________ test_fifo_never_drops_last_partition _____________________
+
+store = <replayhouse.store.ReplayHouse object at 0x10ac26210>
+
+    def test_fifo_never_drops_last_partition(store):
+        t = _mk(store, capacity_rows=5, eviction="fifo")
+        t.insert(make_rows(60, inserted_at="2026-08-06 10:00:00"))
+>       r = t.evict()
+            ^^^^^^^
+E       AttributeError: 'ReplayTable' object has no attribute 'evict'
+
+tests/test_eviction.py:36: AttributeError
+___________________ test_lowest_priority_deletes_bottom_rows ___________________
+
+store = <replayhouse.store.ReplayHouse object at 0x10abfa8b0>
+
+    def test_lowest_priority_deletes_bottom_rows(store):
+        t = _mk(store, capacity_rows=100, eviction="lowest_priority")
+        low_ids = t.insert(make_rows(50, task_family="low", priority=0.1))
+        t.insert(make_rows(100, task_family="high", priority=5.0))
+>       r = t.evict()
+            ^^^^^^^
+E       AttributeError: 'ReplayTable' object has no attribute 'evict'
+
+tests/test_eviction.py:44: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_eviction.py::test_evict_noop_without_capacity - AttributeEr...
+FAILED tests/test_eviction.py::test_fifo_drops_oldest_partitions - AttributeE...
+FAILED tests/test_eviction.py::test_fifo_never_drops_last_partition - Attribu...
+FAILED tests/test_eviction.py::test_lowest_priority_deletes_bottom_rows - Att...
+============================== 4 failed in 0.41s ===============================
