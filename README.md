@@ -83,3 +83,38 @@ Each item is a whole `SampleBatch` (the store does the batching) — keep
 `batch_size=None` and `num_workers=0` in the `DataLoader`. Runnable demos:
 [`examples/bandit.py`](examples/bandit.py) and
 [`examples/train_reward_model.py`](examples/train_reward_model.py).
+
+## Examples {#examples}
+
+All examples run offline against embedded chdb — no server, no keys.
+
+- [`examples/agent/`](examples/agent/) — the full pipeline: record agent
+  trajectories (simulated by default; `--live` runs a real Claude tool-use
+  agent), then `curate.py` builds a filtered, stratified, reward-weighted
+  fine-tuning set and exports Parquet.
+- [`examples/grpo_loop.py`](examples/grpo_loop.py) — a GRPO-shaped training
+  loop: group-relative advantages in, advantage-weighted sampling out,
+  priorities refreshed from `|advantage|`.
+- [`examples/observability.py`](examples/observability.py) — the same store
+  feeding dashboards: six Grafana-ready queries
+  ([`observability.sql`](examples/observability.sql)) over the rows the
+  trainer samples.
+- [`examples/quickstart.ipynb`](examples/quickstart.ipynb) — the API tour as
+  an executable notebook.
+- [`examples/bandit.py`](examples/bandit.py) and
+  [`examples/train_reward_model.py`](examples/train_reward_model.py) — small
+  single-file demos (priority-proportional bandit; prioritized-replay
+  training).
+
+## Development {#development}
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev,torch]'
+.venv/bin/pytest tests            # full offline suite (chdb)
+
+# integration tests against a real server:
+docker run -d --rm --name rh-it -p 18123:8123 \
+  -e CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 clickhouse/clickhouse-server:25.3
+REPLAYHOUSE_TEST_URL=clickhouse://localhost:18123/default \
+  .venv/bin/pytest tests_integration -m integration; docker stop rh-it
+```
