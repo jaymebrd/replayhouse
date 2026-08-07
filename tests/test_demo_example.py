@@ -38,6 +38,24 @@ def test_demo_attention_migrates_to_hard_examples():
     assert sum(ratios) / len(ratios) > 1.1
 
 
+def test_uniform_mode_ratio_stays_low():
+    pytest.importorskip("torch")
+    out = subprocess.run(
+        [sys.executable, str(ROOT / "examples" / "demo.py"),
+         "--headless", "--steps", "80", "--mode", "uniform"],
+        capture_output=True, text=True, timeout=600, check=True,
+    ).stdout
+    lines = [l for l in out.splitlines() if l.startswith("step")]
+    ratios = []
+    for l in lines[-5:]:
+        sampled = float(l.split("sampled_mean_p ")[1].split()[0])
+        pop = float(l.split("pop_mean_p ")[1].split()[0])
+        ratios.append(sampled / max(pop, 1e-9))
+    # Uniform draws don't chase hard examples: ratio hovers near 1,
+    # clearly below the prioritized-mode threshold of 1.1.
+    assert sum(ratios) / len(ratios) < 1.1
+
+
 def test_render_is_pure_and_complete():
     pytest.importorskip("torch")
     from examples.demo import DemoState, render

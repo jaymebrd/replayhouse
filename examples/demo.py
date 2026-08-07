@@ -139,7 +139,7 @@ class DemoEngine:
         errors = (pred - y).abs().squeeze(1).detach()
         self._t.update_priorities(b.ids, [max(float(e), 0.01) for e in errors])
         self.state.step += 1
-        self.state.losses.append(float(loss))
+        self.state.losses.append(loss.detach().item())
         # Note: stats read post-update priorities, so sampled_mean_p reflects each row's fresh |error|.
         self._store_stats(set(b.ids))
         return self.state
@@ -194,12 +194,15 @@ def main(argv=None) -> None:
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--batch", type=int, default=256)
     p.add_argument("--headless", action="store_true")
+    p.add_argument("--mode", choices=["prioritized", "uniform"],
+                    default="prioritized")
     args = p.parse_args(argv)
 
     with tempfile.TemporaryDirectory() as tmp:
         engine = DemoEngine(f"{tmp}/db", batch=args.batch)
+        engine.state.mode = args.mode
         try:
-            if args.headless or not sys.stdout.isatty():
+            if args.headless or not (sys.stdout.isatty() and sys.stdin.isatty()):
                 run_headless(engine, args.steps)
             else:
                 try:
