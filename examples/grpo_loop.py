@@ -7,13 +7,16 @@ and the "environment" a contextual bandit, so it runs offline in seconds —
 swap those two pieces for a model and rollout workers and the plumbing is
 unchanged.
 
+Rollouts are seeded, but the store's weighted draws use ClickHouse-side randomness,
+so exact reward numbers vary slightly between runs. The learning-curve margin in
+the smoke test accounts for this.
+
 Run: python examples/grpo_loop.py   (needs replayhouse[torch])
 """
 
 from __future__ import annotations
 
 import argparse
-import random
 import tempfile
 
 import torch
@@ -30,7 +33,6 @@ def main(argv=None) -> None:
     args = p.parse_args(argv)
 
     torch.manual_seed(args.seed)
-    rng = random.Random(args.seed)
     contexts = torch.randn(N_PROMPTS, DIM)
     true_w = torch.randn(DIM, N_ACTIONS)
     best = (contexts @ true_w).argmax(dim=1)          # hidden optimal action
