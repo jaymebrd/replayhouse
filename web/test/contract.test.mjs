@@ -49,5 +49,21 @@ await test("where filter and by expression", async () => {
   assert.ok(r.rows.every((x) => x.task === "t1"));
 });
 
+await test("rapid last-write-wins via monotonic versions", async () => {
+  await store.create("exp2", { task: "LowCardinality(String)", reward: "Float32" });
+  const ids = await store.insert("exp2", Array.from({ length: 5 }, (_, i) => ({ task: `t${i}`, reward: i / 10 })));
+  assert.equal(ids.length, 5);
+  // two back-to-back updatePriorities with no awaited work between; later call must win due to monotonic versioning
+  const p1 = store.updatePriorities("exp2", ids, ids.map(() => 5.0));
+  const p2 = store.updatePriorities("exp2", ids, ids.map(() => 0.5));
+  await p1;
+  await p2;
+  const priorities = await store.query(
+    `SELECT id, argMax(priority, version) AS priority FROM exp2__priorities GROUP BY id`);
+  priorities.forEach((row) => {
+    assert.equal(parseFloat(row.priority), 0.5, `expected priority 0.5, got ${row.priority}`);
+  });
+});
+
 await conn.close();
 await db.terminate();

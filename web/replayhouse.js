@@ -18,9 +18,17 @@ function sampleKey(by, seed, idExpr = "id") {
 }
 
 export class Store {
+  #lastVersion = 0n;
+
   constructor(conn) { this.conn = conn; }
 
   static async open(conn) { return new Store(conn); }
+
+  _nextVersion() {
+    const now = BigInt(Date.now()) * 1_000_000n;   // ms -> ns scale, comparable to Python's time_ns()
+    this.#lastVersion = now > this.#lastVersion ? now : this.#lastVersion + 1n;
+    return this.#lastVersion.toString();           // serialize as string; ClickHouse parses quoted UInt64
+  }
 
   async query(sql) {
     const r = await this.conn.query(sql, "JSONEachRow");
@@ -45,7 +53,7 @@ export class Store {
   async insert(name, rows) {
     checkName(name);
     if (!rows.length) return [];
-    const version = Date.now() * 1000;
+    const version = this._nextVersion();
     const main = [], prios = [];
     for (const row of rows) {
       const { priority = 1.0, ...rest } = row;
@@ -63,6 +71,7 @@ export class Store {
   }
 
   async sample(name, k, { by = "priority", where = null, seed = null } = {}) {
+    // by/where are trusted raw SQL (same contract as the Python client) — never wire user input into them without your own validation.
     checkName(name);
     k = Math.trunc(k);
     if (seed !== null && !Number.isInteger(seed)) throw new Error("seed must be an int");
@@ -102,7 +111,7 @@ export class Store {
     if (ids.length !== values.length) throw new Error("ids/values length mismatch");
     if (!ids.length) return;
     for (const id of ids) if (!UUID_RE.test(id)) throw new Error(`not a UUID: ${id}`);
-    const version = Date.now() * 1000;
+    const version = this._nextVersion();
     const nd = ids.map((id, i) =>
       JSON.stringify({ id, priority: values[i], version })).join("\n");
     await this._exec(
