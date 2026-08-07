@@ -1,4 +1,0 @@
-n	ingest_s	phase1_ms	sample_ms	sample_where_ms	sample_by_main_ms	update_8k_ms	sample_bloat3x_ms	compact_s	sample_postcompact_ms
-1000000	0.3	22.7	95.7	146.2	102.6	26.7	110.8	0.2	97.3
-10000000	3.6	109.1	318.4	657.6	178.6	23.0	396.2	1.6	235.1
-50000000	10.9	754.6	1142.3	2731.5	574.5	103.6	2642.2	8.3	1272.0
