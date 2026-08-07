@@ -1,0 +1,138 @@
+"""Watch prioritized experience replay happen — against a real store.
+
+A tiny torch model learns y = 2*x1 - x2 from a ReplayHouse store. Every
+frame is real: batches are weighted draws from chdb, per-sample errors go
+back as priorities, and the histogram is a live query over the priority
+sidecar. Press [u] to switch to uniform sampling and watch the difference
+(interactive mode arrives with the TTY loop; --headless prints lines).
+
+Run: python examples/demo.py            (needs replayhouse[torch])
+     python examples/demo.py --headless --steps 100
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import tempfile
+from dataclasses import dataclass, field
+
+try:
+    import torch
+except ImportError:
+    sys.exit("the demo needs torch: pip install 'replayhouse[torch]'")
+
+import replayhouse
+
+TRUE_W = (2.0, -1.0)
+BINS = 10
+
+
+@dataclass
+class DemoState:
+    step: int = 0
+    mode: str = "prioritized"
+    losses: list = field(default_factory=list)
+    hist: list = field(default_factory=lambda: [0] * BINS)
+    hist_edges: tuple = (0.0, 1.0)
+    sampled_mean_p: float = 0.0
+    pop_mean_p: float = 0.0
+    top_decile_share: float = 0.0
+    paused: bool = False
+
+
+class DemoEngine:
+    def __init__(self, db_path: str, n_rows: int = 2000, batch: int = 256,
+                 seed: int = 0):
+        torch.manual_seed(seed)
+        gen = torch.Generator().manual_seed(seed)
+        self._store = replayhouse.connect(f"chdb://{db_path}")
+        self._t = self._store.create(
+            "demo", columns={"x1": "Float32", "x2": "Float32", "y": "Float32"})
+        xs = torch.rand(n_rows, 2, generator=gen) * 2 - 1
+        noise = torch.randn(n_rows, 1, generator=gen) * 0.05
+        ys = xs[:, :1] * TRUE_W[0] + xs[:, 1:] * TRUE_W[1] + noise
+        self._t.insert([
+            {"x1": float(a), "x2": float(b), "y": float(c)}
+            for (a, b), c in zip(xs.tolist(), ys.squeeze(1).tolist())
+        ])
+        self._model = torch.nn.Linear(2, 1)
+        self._opt = torch.optim.SGD(self._model.parameters(), lr=0.05)
+        self._batch = batch
+        self.state = DemoState()
+
+    def toggle_mode(self) -> None:
+        self.state.mode = ("uniform" if self.state.mode == "prioritized"
+                           else "prioritized")
+
+    def _store_stats(self, sampled_ids: set) -> None:
+        rows = self._store.query(
+            "SELECT id, argMax(priority, version) AS p "
+            "FROM demo__priorities GROUP BY id")
+        ps = {r["id"]: float(r["p"]) for r in rows}
+        values = sorted(ps.values())
+        lo, hi = values[0], max(values[-1], values[0] + 1e-9)
+        hist = [0] * BINS
+        for v in values:
+            hist[min(BINS - 1, int((v - lo) / (hi - lo) * BINS))] += 1
+        s = self.state
+        s.hist, s.hist_edges = hist, (lo, hi)
+        s.pop_mean_p = sum(values) / len(values)
+        sampled = [ps[i] for i in sampled_ids if i in ps]
+        s.sampled_mean_p = sum(sampled) / max(len(sampled), 1)
+        decile_cut = values[int(len(values) * 0.9)]
+        s.top_decile_share = (sum(1 for v in sampled if v >= decile_cut)
+                              / max(len(sampled), 1))
+
+    def step(self) -> DemoState:
+        by = "priority" if self.state.mode == "prioritized" else "1"
+        b = self._t.sample(self._batch, by=by)
+        x = torch.tensor([[float(r["x1"]), float(r["x2"])] for r in b.rows])
+        y = torch.tensor([[float(r["y"])] for r in b.rows])
+        pred = self._model(x)
+        loss = torch.nn.functional.mse_loss(pred, y)
+        self._opt.zero_grad(); loss.backward(); self._opt.step()
+        errors = (pred - y).abs().squeeze(1).detach()
+        self._t.update_priorities(b.ids, [max(float(e), 0.01) for e in errors])
+        self.state.step += 1
+        self.state.losses.append(float(loss))
+        self._store_stats(set(b.ids))
+        return self.state
+
+    def close(self) -> None:
+        self._store.close()
+
+
+def run_headless(engine: DemoEngine, steps: int) -> tuple:
+    first = None
+    for _ in range(steps):
+        s = engine.step()
+        first = first if first is not None else s.losses[-1]
+        print(f"step {s.step:>4}  loss {s.losses[-1]:.4f}  "
+              f"sampled_mean_p {s.sampled_mean_p:.3f}  "
+              f"pop_mean_p {s.pop_mean_p:.3f}  "
+              f"top_decile_share {s.top_decile_share:.2f}", flush=True)
+    print(f"demo complete: loss {first:.4f} -> {s.losses[-1]:.4f}")
+    return first, s.losses[-1]
+
+
+def main(argv=None) -> None:
+    p = argparse.ArgumentParser()
+    p.add_argument("--steps", type=int, default=200)
+    p.add_argument("--batch", type=int, default=256)
+    p.add_argument("--headless", action="store_true")
+    args = p.parse_args(argv)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        engine = DemoEngine(f"{tmp}/db", batch=args.batch)
+        try:
+            if args.headless or not sys.stdout.isatty():
+                run_headless(engine, args.steps)
+            else:
+                run_headless(engine, args.steps)  # TTY loop replaces this in Task 2
+        finally:
+            engine.close()
+
+
+if __name__ == "__main__":
+    main()
