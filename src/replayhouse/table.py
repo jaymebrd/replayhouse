@@ -69,7 +69,13 @@ class ReplayTable:
         return [r["id"] for r in main]
 
     def sample(self, k: int, *, by: str = "priority", where: str | None = None,
-               stratify_by: str | None = None) -> SampleBatch:
+               stratify_by: str | None = None, seed: int | None = None) -> SampleBatch:
+        """Sample k rows from the table.
+
+        A seeded draw is a pure function of the store's current rows, weights, and the seed — identical until the data changes.
+        """
+        if seed is not None and not isinstance(seed, int):
+            raise SchemaError("seed must be an int")
         if stratify_by is not None:
             validate_name(stratify_by)
             where_sql = f" WHERE ({where})" if where else ""
@@ -80,10 +86,10 @@ class ReplayTable:
             if groups == 0:
                 return SampleBatch()
             per_group = max(1, int(k) // groups)
-            sql = stratified_sql(self.name, k, per_group, stratify_by, by=by, where=where)
+            sql = stratified_sql(self.name, k, per_group, stratify_by, by=by, where=where, seed=seed)
             chosen = self._backend.query_rows(sql)
         else:
-            chosen = self._backend.query_rows(phase1_sql(self.name, k, by=by, where=where))
+            chosen = self._backend.query_rows(phase1_sql(self.name, k, by=by, where=where, seed=seed))
         ids = [r["id"] for r in chosen]
         if not ids:
             return SampleBatch()
