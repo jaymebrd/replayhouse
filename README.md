@@ -1,22 +1,33 @@
 # replayhouse
 
-An agentic experience store with native weighted sampling, built on ClickHouse.
+Experience replay on ClickHouse.
 
-ReplayHouse is a thin Python client that turns ClickHouse (a server, or
-embedded [chdb](https://github.com/chdb-io/chdb) with zero infrastructure)
-into a replay buffer for LLM/agent post-training — in the spirit of DeepMind
-Reverb, but designed for agentic workloads:
+replayhouse stores agent trajectories and samples weighted training batches
+from them. It's a small Python client over ClickHouse — a server, or
+[chdb](https://github.com/chdb-io/chdb) running in-process, so there is
+nothing to deploy to try it. The idea is Reverb with a database where the
+replay server used to be: because the buffer is a table, you can filter a
+draw with a `WHERE` clause, stratify it with `LIMIT BY`, and point Grafana
+at the exact rows your trainer consumed.
 
-- **Prioritized sampling as a query**: weighted, without-replacement batch
-  draws fused with arbitrary SQL filters and stratification.
-- **Append-heavy trajectory ingestion** from many concurrent rollout workers.
-- **Batch priority updates** with no mutations in the hot loop.
-- **Time- and capacity-based eviction** (FIFO / lowest-priority).
-- **One store for training and observability** — the same rows feed the
-  trainer, dashboards, and debugging queries.
+```python
+batch = t.sample(8192, by="priority", where="env_version >= 12")
+loss, new_priorities = train_step(batch.rows)
+t.update_priorities(batch.ids, new_priorities)
+```
 
-Status: design phase. See the
-[design doc](docs/superpowers/specs/2026-08-06-replayhouse-design.md).
+Sampling is weighted and without replacement (an Efraimidis–Spirakis top-k
+in plain SQL, so it parallelizes and even distributes across shards).
+Priority updates never mutate rows — they're inserts into a small sidecar
+table, resolved last-write-wins at read time — so both directions of the
+hot loop are append-only. Eviction is TTL plus capacity policies (drop
+oldest, or drop lowest-priority). On a laptop, drawing 8192 trajectories
+from a 50M-row store takes about 1.1s ([measured](benchmarks/RESULTS.md));
+updating 8k priorities takes ~100ms.
+
+Status: early development, pre-PyPI. The
+[design doc](docs/superpowers/specs/2026-08-06-replayhouse-design.md) has
+the full data model.
 
 ## Quick start {#quick-start}
 
