@@ -14,3 +14,6 @@ def test_observability_runs_all_queries():
     for header in ("Reward by day", "Worst 10 trajectories", "Token spend",
                    "Success rate", "priority distribution", "Store size"):
         assert header in out
+    # Seed dates are relative to today, so the "last day" stat should never
+    # go stale to NULL/None regardless of when this test runs.
+    assert "last_day=None" not in out

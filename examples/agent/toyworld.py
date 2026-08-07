@@ -40,6 +40,8 @@ def calculator(expression: str) -> str:
         allowed = set("0123456789+-*/ ().")
         if not set(expression) <= allowed:
             return "ERROR: invalid characters"
+        if "**" in expression or len(expression) > 100:
+            return "ERROR: unsupported expression"
         return str(eval(expression, {"__builtins__": {}}, {}))  # toy world only
     except Exception as e:
         return f"ERROR: {e}"

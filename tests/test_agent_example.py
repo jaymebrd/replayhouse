@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
+from examples.agent.toyworld import calculator
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -34,3 +36,13 @@ def test_simulator_reward_signal_is_mixed(tmp_path):
                 "--episodes", "80", "--seed", "2"], cwd=ROOT)
     mean = float(rec.split("mean reward ")[1].rstrip(")\n"))
     assert 0.4 < mean < 0.95  # skill levels produce a mixed signal, not all-success
+
+
+def test_calculator_rejects_huge_int_exponentiation():
+    # 9**9**9 is a valid whitelisted expression that hangs on huge-int
+    # exponentiation; the length/"**" guard must reject it before eval.
+    assert calculator("9**9**9") == "ERROR: unsupported expression"
+
+
+def test_calculator_still_evaluates_normal_expressions():
+    assert calculator("2 + 3 * 4") == "14"

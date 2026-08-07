@@ -72,6 +72,8 @@ def main(argv=None) -> None:
             loss = -(logp * adv).mean()
             opt.zero_grad(); loss.backward(); opt.step()
 
+            # Priorities feed eviction and by="priority" consumers. This loop samples
+            # by advantage directly, so the refresh here shows the pattern, not the math.
             t.update_priorities(batch.ids,
                                 [max(abs(float(r["advantage"])), 0.01)
                                  for r in batch.rows])

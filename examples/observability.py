@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import random
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import replayhouse
@@ -38,7 +39,7 @@ def seed(store) -> None:
                     "task_family": fam, "env_version": 1, "model": "demo-v0",
                     "steps": {"trace": []}, "answer": "x", "reward": r,
                     "total_tokens": rng.randint(200, 3000),
-                    "inserted_at": f"2026-08-0{day + 1} 12:00:00",
+                    "inserted_at": (datetime.now() - timedelta(days=6 - day)).strftime("%Y-%m-%d 12:00:00"),
                     "priority": max(r, 0.1),
                 })
     t.insert(rows)
@@ -57,6 +58,8 @@ def main(argv=None) -> None:
         for q in queries:
             header = q.splitlines()[0].lstrip("- ")
             print(f"\n== {header}")
+            # Demo shortcut via the private backend - the .sql file is the deliverable;
+            # point Grafana (or any client) at your store for real dashboards.
             for row in store._backend.query_rows(q):
                 print("  " + "  ".join(f"{k}={v}" for k, v in row.items()))
         print(f"\nran {len(queries)} queries")
