@@ -35,6 +35,15 @@ class ReplayHouse:
         self._backend.command(f"DROP TABLE IF EXISTS `{ddl.sidecar_name(name)}`")
         self._backend.command(f"DROP TABLE IF EXISTS `{name}`")
 
+    def query(self, sql: str) -> list[dict]:
+        """Run arbitrary SQL against the store's backend and return rows.
+
+        Trusted input (same contract as sample's by=/where=): this is a
+        database client, not a sandbox. 64-bit integers arrive as strings
+        (JSONEachRow); coerce with int() as needed.
+        """
+        return self._backend.query_rows(sql)
+
     def close(self) -> None:
         self._backend.close()
 

@@ -58,9 +58,7 @@ def main(argv=None) -> None:
         for q in queries:
             header = q.splitlines()[0].lstrip("- ")
             print(f"\n== {header}")
-            # Demo shortcut via the private backend - the .sql file is the deliverable;
-            # point Grafana (or any client) at your store for real dashboards.
-            for row in store._backend.query_rows(q):
+            for row in store.query(q):
                 print("  " + "  ".join(f"{k}={v}" for k, v in row.items()))
         print(f"\nran {len(queries)} queries")
         store.close()
