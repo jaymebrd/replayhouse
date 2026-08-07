@@ -8,3 +8,12 @@ class SchemaError(ReplayHouseError):
 
 class BackendError(ReplayHouseError):
     """Connection or driver-level failure."""
+
+
+class TableExistsError(SchemaError):
+    """create() found an existing table with the same name."""
+
+    def __init__(self, table_name: str):
+        super().__init__(f"table {table_name!r} already exists "
+                         f"(pass exists_ok=True to open it instead)")
+        self.table_name = table_name

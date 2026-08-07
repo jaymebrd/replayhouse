@@ -104,10 +104,7 @@ def main(argv=None) -> None:
 
     rng = random.Random(args.seed)
     store = replayhouse.connect(f"chdb://{args.db}")
-    try:
-        t = store.create("trajectories", columns=COLUMNS)
-    except Exception:
-        t = store.table("trajectories")  # append to an existing demo store
+    t = store.create("trajectories", columns=COLUMNS, exists_ok=True)
 
     rows = []
     for _ in range(args.episodes):

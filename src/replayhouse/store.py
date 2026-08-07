@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from . import ddl
 from .backend import Backend, backend_from_url
+from .errors import TableExistsError
 from .table import ReplayTable
 
 
@@ -14,7 +15,19 @@ class ReplayHouse:
         return cls(backend_from_url(url))
 
     def create(self, name, columns, *, ttl_days=None, capacity_bytes=None,
-               capacity_rows=None, eviction="fifo") -> ReplayTable:
+               capacity_rows=None, eviction="fifo", exists_ok: bool = False) -> ReplayTable:
+        ddl.validate_name(name)
+        existing = self._backend.query_rows(
+            f"SELECT count() AS c FROM system.tables "
+            f"WHERE database = currentDatabase() AND name = '{name}'"
+        )
+        if int(existing[0]["c"]) > 0:
+            if exists_ok:
+                return self.table(name)
+            raise TableExistsError(name)
+        # Note: check-then-create is racy under concurrent creators; the
+        # loser gets the backend's own already-exists error, which is fine
+        # for a client-side convenience.
         config = ddl.build_config(
             capacity_bytes=capacity_bytes, capacity_rows=capacity_rows, eviction=eviction
         )
