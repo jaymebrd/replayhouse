@@ -88,6 +88,14 @@ Each item is a whole `SampleBatch` (the store does the batching) — keep
 
 All examples run offline against embedded chdb — no server, no keys.
 
+![Prioritized replay demo](examples/demo.gif)
+
+*The recording is real: a model trains from the store, per-example errors
+flow back as priorities (the histogram is a live query over the sidecar),
+and pressing `u` switches to uniform sampling — the sampled-batch priority
+ratio collapses from ~1.4x toward ~0.9x, then recovers on re-prioritize.
+Re-record with `vhs examples/demo.tape`.*
+
 - [`examples/demo.py`](examples/demo.py) — watch prioritized replay happen:
   a live terminal animation where the histogram is a real query over the
   priority sidecar and `[u]` flips between prioritized and uniform sampling.
