@@ -36,3 +36,26 @@ def test_demo_attention_migrates_to_hard_examples():
         pop = float(l.split("pop_mean_p ")[1].split()[0])
         ratios.append(sampled / max(pop, 1e-9))
     assert sum(ratios) / len(ratios) > 1.1
+
+
+def test_render_is_pure_and_complete():
+    pytest.importorskip("torch")
+    from examples.demo import DemoState, render
+
+    s = DemoState(step=7, mode="prioritized", losses=[1.0, 0.5, 0.25],
+                  hist=[5, 3, 2, 0, 0, 0, 0, 0, 0, 1],
+                  hist_edges=(0.01, 2.0), sampled_mean_p=0.9,
+                  pop_mean_p=0.5, top_decile_share=0.4)
+    frame = render(s)
+    for token in ("step 7", "prioritized", "0.2500"[:5], "bin 0", "1.80x",
+                  "40%", "[space]"):
+        assert token in frame, token
+    assert frame == render(s)  # pure: same state, same frame
+
+
+def test_render_uniform_mode_labels():
+    pytest.importorskip("torch")
+    from examples.demo import DemoState, render
+
+    frame = render(DemoState(mode="uniform", losses=[1.0]))
+    assert "uniform" in frame and "re-prioritize" in frame

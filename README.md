@@ -88,6 +88,9 @@ Each item is a whole `SampleBatch` (the store does the batching) — keep
 
 All examples run offline against embedded chdb — no server, no keys.
 
+- [`examples/demo.py`](examples/demo.py) — watch prioritized replay happen:
+  a live terminal animation where the histogram is a real query over the
+  priority sidecar and `[u]` flips between prioritized and uniform sampling.
 - [`examples/agent/`](examples/agent/) — the full pipeline: record agent
   trajectories (simulated by default; `--live` runs a real Claude tool-use
   agent), then `curate.py` builds a filtered, stratified, reward-weighted

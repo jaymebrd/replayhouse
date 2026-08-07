@@ -24,6 +24,50 @@ except ImportError:
 
 import replayhouse
 
+SPARK = "▁▂▃▄▅▆▇█"
+CLEAR = "\x1b[2J\x1b[H"
+DIM, BOLD, RESET = "\x1b[2m", "\x1b[1m", "\x1b[0m"
+BAR_COLOR = "\x1b[38;5;208m"   # single accent; degrades fine on 16-color
+
+
+def _spark(values, width):
+    tail = values[-width:]
+    if not tail:
+        return ""
+    lo, hi = min(tail), max(max(tail), min(tail) + 1e-9)
+    return "".join(SPARK[int((v - lo) / (hi - lo) * (len(SPARK) - 1))]
+                   for v in tail)
+
+
+def render(state, width: int = 72) -> str:
+    s = state
+    out = [CLEAR + BOLD + "ReplayHouse: prioritized replay, live from chdb"
+           + RESET]
+    mode_note = ("sampling ∝ priority" if s.mode == "prioritized"
+                 else "sampling uniform (press u to re-prioritize)")
+    out.append(f"step {s.step:<6} mode {BOLD}{s.mode}{RESET} ({mode_note})"
+               f"{'   [paused]' if s.paused else ''}")
+    out.append("")
+    loss = s.losses[-1] if s.losses else float("nan")
+    out.append(f"loss {loss:8.4f}  {DIM}{_spark(s.losses, width - 16)}{RESET}")
+    out.append("")
+    out.append(f"priority histogram {DIM}(live query over demo__priorities; "
+               f"range {s.hist_edges[0]:.2f}–{s.hist_edges[1]:.2f}){RESET}")
+    peak = max(max(s.hist), 1)
+    for i, count in enumerate(s.hist):
+        bar = BAR_COLOR + "█" * int(count / peak * (width - 22)) + RESET
+        out.append(f"  bin {i:<2} {count:>5} {bar}")
+    out.append("")
+    ratio = s.sampled_mean_p / max(s.pop_mean_p, 1e-9)
+    out.append(f"sampled-batch mean priority {s.sampled_mean_p:.3f} vs "
+               f"population {s.pop_mean_p:.3f}  ({BOLD}{ratio:.2f}x{RESET})")
+    out.append(f"share of batch from top-decile priority: "
+               f"{BOLD}{s.top_decile_share:.0%}{RESET}")
+    out.append("")
+    out.append(f"{DIM}[space] pause   [u] uniform/prioritized   [q] quit{RESET}")
+    return "\n".join(out)
+
+
 TRUE_W = (2.0, -1.0)
 BINS = 10
 
@@ -96,6 +140,7 @@ class DemoEngine:
         self._t.update_priorities(b.ids, [max(float(e), 0.01) for e in errors])
         self.state.step += 1
         self.state.losses.append(float(loss))
+        # Note: stats read post-update priorities, so sampled_mean_p reflects each row's fresh |error|.
         self._store_stats(set(b.ids))
         return self.state
 
@@ -116,6 +161,34 @@ def run_headless(engine: DemoEngine, steps: int) -> tuple:
     return first, s.losses[-1]
 
 
+def run_tty(engine: DemoEngine, steps: int) -> None:
+    import select
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
+    try:
+        while engine.state.step < steps:
+            if not engine.state.paused:
+                engine.step()
+            sys.stdout.write(render(engine.state))
+            sys.stdout.flush()
+            r, _, _ = select.select([sys.stdin], [], [], 0.12)
+            if r:
+                key = sys.stdin.read(1)
+                if key == "q":
+                    break
+                if key == " ":
+                    engine.state.paused = not engine.state.paused
+                if key == "u":
+                    engine.toggle_mode()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        print()
+
+
 def main(argv=None) -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--steps", type=int, default=200)
@@ -129,7 +202,11 @@ def main(argv=None) -> None:
             if args.headless or not sys.stdout.isatty():
                 run_headless(engine, args.steps)
             else:
-                run_headless(engine, args.steps)  # TTY loop replaces this in Task 2
+                try:
+                    run_tty(engine, args.steps)
+                except ImportError:
+                    print("no termios here - falling back to headless")
+                    run_headless(engine, args.steps)
         finally:
             engine.close()
 
