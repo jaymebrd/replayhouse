@@ -270,16 +270,22 @@ git commit -m "feat: replayhouse.js - the SQL contract mirrored over chdb-wasm, 
 
 ---
 
-### Task 2: Playground page + local server
+
+---
+
+> **AMENDMENT (2026-08-08).** Task 1 is complete (commits 375b333 + 0957da5, review clean; version scheme superseded by monotonic BigInt — the Task 1 code above is historical). Tasks below replace the original Tasks 2–3 with a three-act "wow" page, informed by two passed spikes: the wasm engine holds **10M rows** with 8k weighted draws at **~561ms** (58ms at 1M), and `db.putFile` + `file()` supports drag-and-drop querying. Design: Act 1 *scale you can poke*, Act 2 *your own data*, Act 3 *the learning loop*. Page identity unchanged (near-black terminal aesthetic, orange accent, monospace).
+
+### Task 2: Page skeleton + Act 1 (scale bench)
 
 **Files:**
-- Create: `web/index.html`, `web/playground.js`, `web/serve.mjs`
+- Create: `web/index.html`, `web/app.js`, `web/bench.js`, `web/serve.mjs`
 
 **Interfaces:**
-- Consumes: `Store` from Task 1 (exact API above); `chdb-wasm`'s `selectBundle({baseUrl})` + `AsyncChdb.create({moduleUrl, wasmUrl, onProgress})`.
-- Produces: a page that (1) shows a "Load engine (~99 MB, cached after first visit)" button with a progress bar, (2) after load runs the PER loop: 2000 rows of `y = 2*x1 - x2`, JS linear model (plain SGD, ~15 lines), `sample(256)` → train → `updatePriorities(|error|)`, (3) renders the same frame as the terminal demo into a `<pre>` (step, mode, loss + sparkline, 10-bin histogram from a live sidecar query, ratio + top-decile lines), (4) controls: Prioritized/Uniform toggle, Pause, Reset, plus `u`/`space` keys. Engine base URL resolves `./engine/` when present (gh-pages layout) falling back to `./node_modules/chdb-wasm/dist/` (local dev).
+- Consumes: `Store` from Task 1; chdb-wasm `selectBundle`/`AsyncChdb`.
+- Produces (Tasks 3-4 rely on these): `web/app.js` exports `initEngine(onProgress) -> Promise<{db, conn, store}>` (bundle resolution: HEAD-probe `./engine/chdb.mjs`, fall back to `./node_modules/chdb-wasm/dist`), `fmtMs(x)`, `el(id)`; `index.html` has three `<section>` acts with ids `act-scale`, `act-data`, `act-learn`, each initially disabled until the engine loads; a top loader button + `<progress>`. `bench.js` exports `initBench({store, conn})`.
+- Act 1 behavior: row-count buttons (100k / 1M / 5M / 10M) generate rows engine-side in chunks with a progress readout (`INSERT ... SELECT ... FROM numbers(...)` into a `bench` store created via `Store.create`, priorities skewed `0.01 + pow(randCanonical(),3)*10` written to the sidecar by a direct INSERT SELECT); a big **Sample 8,192** button runs the `FINAL`-form weighted draw, timed with `performance.now()`, displaying: latency (ms), rows scanned (from `rowsRead` if exposed, else the table count), and the exact SQL in a `<details>` block labeled "the query that just ran". A one-line honesty note: "measured in your browser just now — nothing precomputed."
 
-- [ ] **Step 1: Write `web/serve.mjs`** (local dev only — plain static server, no headers needed for the st bundle)
+- [ ] **Step 1: `web/serve.mjs`** — unchanged from the original plan:
 
 ```javascript
 import { createServer } from "node:http";
@@ -299,258 +305,327 @@ createServer(async (req, res) => {
 }).listen(8099, () => console.log("http://localhost:8099"));
 ```
 
-- [ ] **Step 2: Write `web/index.html`**
-
-Monospace, near-black page matching the terminal demo's look (single deliberate theme — it's a terminal); orange accent `#e8863f`; a `<pre id="frame">` as the screen; buttons `Load engine`, `Prioritized/Uniform`, `Pause`, `Reset`; a `<progress>` element for the download; footer linking the GitHub repo and stating "every number on this page comes from a ClickHouse query running in this tab." Full markup in this step (compact — the visual identity is the terminal frame itself):
+- [ ] **Step 2: `web/index.html`** — three-act shell:
 
 ```html
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ReplayHouse — prioritized replay in your browser</title>
+<title>ReplayHouse — a ClickHouse replay buffer in your browser tab</title>
 <style>
-  :root { --bg: #14161a; --ink: #e8eaed; --dim: #9aa3ad; --accent: #e8863f; }
-  body { background: var(--bg); color: var(--ink); margin: 0;
-    font: 15px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh; padding: 2rem 1rem; box-sizing: border-box; }
-  h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .2rem; }
-  h1 b { color: var(--accent); }
-  .sub { color: var(--dim); font-size: .85rem; margin: 0 0 1.2rem; }
-  #frame { background: #101215; border: 1px solid #2a2e34; border-radius: 6px;
-    padding: 1rem 1.2rem; min-width: min(76ch, 92vw); min-height: 30ch;
-    overflow-x: auto; white-space: pre; }
-  .bar { color: var(--accent); }
-  .controls { display: flex; gap: .6rem; margin: 1rem 0; flex-wrap: wrap; }
-  button { background: #24282e; color: var(--ink); border: 1px solid #343a42;
-    border-radius: 5px; padding: .45rem .9rem; font: inherit; cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button[disabled] { opacity: .45; cursor: default; }
-  progress { width: min(76ch, 92vw); accent-color: var(--accent); }
-  footer { color: var(--dim); font-size: .8rem; margin-top: 1.4rem;
-    max-width: 76ch; text-align: center; }
-  footer a { color: var(--accent); }
+  :root { --bg:#14161a; --panel:#101215; --ink:#e8eaed; --dim:#9aa3ad;
+    --accent:#e8863f; --edge:#2a2e34; }
+  body { background:var(--bg); color:var(--ink); margin:0;
+    font:15px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    padding:2.2rem 1rem 4rem; display:flex; flex-direction:column; align-items:center; }
+  main { width:min(84ch, 94vw); }
+  h1 { font-size:1.25rem; margin:0 0 .25rem; } h1 b { color:var(--accent); }
+  .sub { color:var(--dim); margin:0 0 1.4rem; font-size:.9rem; }
+  section { border:1px solid var(--edge); border-radius:6px; background:var(--panel);
+    padding:1.1rem 1.3rem; margin:0 0 1.3rem; }
+  section[aria-disabled="true"] { opacity:.45; pointer-events:none; }
+  h2 { font-size:.95rem; margin:0 0 .7rem; }
+  h2 .act { color:var(--accent); margin-right:.5ch; }
+  button { background:#24282e; color:var(--ink); border:1px solid #343a42;
+    border-radius:5px; padding:.45rem .9rem; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button[disabled] { opacity:.45; cursor:default; }
+  button.big { font-size:1.05rem; padding:.6rem 1.3rem; border-color:var(--accent); }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin:.5rem 0; }
+  .stat { font-size:1.5rem; } .stat b { color:var(--accent); }
+  .dim { color:var(--dim); font-size:.85rem; }
+  pre { background:#0c0e11; border:1px solid var(--edge); border-radius:5px;
+    padding:.8rem 1rem; overflow-x:auto; white-space:pre; margin:.6rem 0 0; }
+  .bar { color:var(--accent); }
+  progress { width:100%; accent-color:var(--accent); }
+  details summary { cursor:pointer; color:var(--dim); }
+  #drop { border:2px dashed #3a4048; border-radius:6px; padding:1.6rem;
+    text-align:center; color:var(--dim); }
+  #drop.hot { border-color:var(--accent); color:var(--ink); }
+  table { border-collapse:collapse; margin-top:.6rem; font-size:.85rem; }
+  td, th { border:1px solid var(--edge); padding:.25rem .6rem; text-align:left;
+    font-variant-numeric:tabular-nums; }
+  footer { color:var(--dim); font-size:.8rem; margin-top:1rem; max-width:84ch; }
+  footer a { color:var(--accent); }
 </style>
-<h1><b>ReplayHouse</b> — prioritized replay, live in your tab</h1>
-<p class="sub">the terminal demo, but the ClickHouse engine is WebAssembly running right here</p>
-<pre id="frame">press “Load engine” — chdb-wasm is ~99 MB (cached by your browser after the first visit)</pre>
-<progress id="dl" max="100" value="0" hidden></progress>
-<div class="controls">
-  <button id="load">Load engine (~99 MB)</button>
-  <button id="mode" disabled>Switch to uniform [u]</button>
-  <button id="pause" disabled>Pause [space]</button>
-  <button id="reset" disabled>Reset</button>
+<main>
+<h1><b>ReplayHouse</b> — a ClickHouse replay buffer in your browser tab</h1>
+<p class="sub">real MergeTree tables, real weighted sampling — the OLAP engine is WebAssembly running on this page. nothing leaves your machine.</p>
+
+<div class="row">
+  <button id="load" class="big">Load the engine (~99 MB, cached after first visit)</button>
+  <span id="loadmsg" class="dim"></span>
 </div>
-<footer>every number above comes from a ClickHouse query running in this tab —
-no server, no simulation. <a href="https://github.com/jaymebrd/replayhouse">github.com/jaymebrd/replayhouse</a></footer>
-<script type="module" src="./playground.js"></script>
+<progress id="dl" max="100" value="0" hidden></progress>
+
+<section id="act-scale" aria-disabled="true">
+  <h2><span class="act">act 1</span>how fast is a weighted draw over N rows — in a tab?</h2>
+  <div class="row">
+    <button data-n="100000">100k rows</button>
+    <button data-n="1000000">1M rows</button>
+    <button data-n="5000000">5M rows</button>
+    <button data-n="10000000">10M rows</button>
+    <span id="genmsg" class="dim"></span>
+  </div>
+  <div class="row">
+    <button id="draw" class="big" disabled>Sample 8,192 (weighted, without replacement)</button>
+  </div>
+  <div class="stat" id="drawstat"></div>
+  <p class="dim">measured in your browser just now — nothing precomputed.</p>
+  <details><summary>the query that just ran</summary><pre id="drawsql"></pre></details>
+</section>
+
+<section id="act-data" aria-disabled="true">
+  <h2><span class="act">act 2</span>your data, sampled the same way — locally</h2>
+  <div id="drop">drop a .csv or .parquet here (it is read into the in-page engine, never uploaded)</div>
+  <div class="row" id="datactl" hidden>
+    <label for="wcol">weight by</label>
+    <select id="wcol"></select>
+    <button id="dsample">Weighted sample 10</button>
+    <span id="datamsg" class="dim"></span>
+  </div>
+  <div id="dataout"></div>
+</section>
+
+<section id="act-learn" aria-disabled="true">
+  <h2><span class="act">act 3</span>why a training loop wants this: watch focus emerge</h2>
+  <pre id="frame">engine idle</pre>
+  <div class="row">
+    <button id="mode" disabled>Switch to uniform [u]</button>
+    <button id="pause" disabled>Pause [space]</button>
+    <button id="reset" disabled>Reset</button>
+  </div>
+</section>
+
+<footer>every number on this page comes from a ClickHouse query that ran in this tab.
+engine: <a href="https://github.com/chdb-io/chdb">chdb</a> compiled to WebAssembly ·
+library: <a href="https://github.com/jaymebrd/replayhouse">replayhouse</a></footer>
+</main>
+<script type="module" src="./app.js"></script>
 ```
 
-- [ ] **Step 3: Write `web/playground.js`**
-
-The PER loop + renderer (mirrors `examples/demo.py`'s frame; SPARK/histogram/ratio logic ported):
+- [ ] **Step 3: `web/app.js`** — engine boot + act wiring:
 
 ```javascript
 import { Store } from "./replayhouse.js";
+import { initBench } from "./bench.js";
 
-const N = 2000, BATCH = 256, BINS = 10, SPARK = "▁▂▃▄▅▆▇█";
-const $ = (id) => document.getElementById(id);
-let store, state, timer;
+export const el = (id) => document.getElementById(id);
+export const fmtMs = (x) => x >= 1000 ? `${(x / 1000).toFixed(2)}s` : `${Math.round(x)}ms`;
 
-async function loadEngine() {
-  $("load").disabled = true;
-  const local = "./node_modules/chdb-wasm/dist";
-  const deployed = "./engine";
-  const base = await fetch(`${deployed}/chdb.mjs`, { method: "HEAD" })
-    .then((r) => (r.ok ? deployed : local)).catch(() => local);
+async function resolveBase() {
+  try {
+    const r = await fetch("./engine/chdb.mjs", { method: "HEAD" });
+    if (r.ok) return "./engine";
+  } catch {}
+  return "./node_modules/chdb-wasm/dist";
+}
+
+el("load").onclick = async () => {
+  el("load").disabled = true;
+  el("loadmsg").textContent = "resolving bundle…";
+  const base = await resolveBase();
   const { AsyncChdb, selectBundle } = await import(`${base}/index.js`);
   const bundle = selectBundle({ baseUrl: base });
-  if (!bundle.supported) { $("frame").textContent = bundle.reasons.join("; "); return; }
-  $("dl").hidden = false;
+  if (!bundle.supported) { el("loadmsg").textContent = bundle.reasons.join("; "); return; }
+  el("dl").hidden = false;
   const db = await AsyncChdb.create({
     moduleUrl: bundle.moduleUrl, wasmUrl: bundle.wasmUrl,
-    onProgress: (l, t) => { $("dl").value = (l / t) * 100; },
+    onProgress: (l, t) => { el("dl").value = (l / t) * 100; },
   });
-  $("dl").hidden = true;
-  store = await Store.open(await db.connect());
-  await reset();
-  for (const id of ["mode", "pause", "reset"]) $(id).disabled = false;
-  timer = setInterval(step, 140);
-}
-
-async function reset() {
-  state = { step: 0, mode: "prioritized", paused: false, losses: [],
-            w: [0, 0], b: 0 };
-  await store._exec?.("DROP TABLE IF EXISTS exp");
-  await store._exec?.("DROP TABLE IF EXISTS exp__priorities");
-  await store.create("exp", { x1: "Float32", x2: "Float32", y: "Float32" });
-  const rows = Array.from({ length: N }, () => {
-    const x1 = Math.random() * 2 - 1, x2 = Math.random() * 2 - 1;
-    return { x1, x2, y: 2 * x1 - x2 + (Math.random() - 0.5) * 0.1, priority: 1.0 };
-  });
-  await store.insert("exp", rows);
-}
-
-async function step() {
-  if (state.paused) return;
-  const by = state.mode === "prioritized" ? "priority" : "1";
-  const { ids, rows } = await store.sample("exp", BATCH, { by });
-  let loss = 0; const errs = []; const lr = 0.05;
-  let gw1 = 0, gw2 = 0, gb = 0;
-  for (const r of rows) {
-    const pred = state.w[0] * r.x1 + state.w[1] * r.x2 + state.b;
-    const e = pred - r.y;
-    loss += e * e; errs.push(Math.max(Math.abs(e), 0.01));
-    gw1 += 2 * e * r.x1; gw2 += 2 * e * r.x2; gb += 2 * e;
-  }
-  loss /= rows.length;
-  state.w[0] -= lr * gw1 / rows.length; state.w[1] -= lr * gw2 / rows.length;
-  state.b -= lr * gb / rows.length;
-  await store.updatePriorities("exp", ids, errs);
-  state.step += 1; state.losses.push(loss);
-  await render(new Set(ids));
-}
-
-async function render(sampledIds) {
-  const ps = await store.query(
-    "SELECT id, argMax(priority, version) AS p FROM exp__priorities GROUP BY id");
-  const values = ps.map((r) => Number(r.p)).sort((a, b) => a - b);
-  const lo = values[0], hi = Math.max(values.at(-1), lo + 1e-9);
-  const hist = Array(BINS).fill(0);
-  for (const v of values)
-    hist[Math.min(BINS - 1, Math.floor(((v - lo) / (hi - lo)) * BINS))] += 1;
-  const byId = new Map(ps.map((r) => [r.id, Number(r.p)]));
-  const sampled = [...sampledIds].map((i) => byId.get(i)).filter((x) => x != null);
-  const popMean = values.reduce((a, b) => a + b, 0) / values.length;
-  const sMean = sampled.reduce((a, b) => a + b, 0) / Math.max(sampled.length, 1);
-  const cut = values[Math.floor(values.length * 0.9)];
-  const topShare = sampled.filter((v) => v >= cut).length / Math.max(sampled.length, 1);
-
-  const tail = state.losses.slice(-56);
-  const mn = Math.min(...tail), mx = Math.max(Math.max(...tail), mn + 1e-9);
-  const spark = tail.map((v) =>
-    SPARK[Math.round(((v - mn) / (mx - mn)) * (SPARK.length - 1))]).join("");
-  const peak = Math.max(...hist, 1);
-  const bars = hist.map((c, i) =>
-    `  bin ${String(i).padEnd(2)} ${String(c).padStart(5)} ` +
-    `<span class="bar">${"█".repeat(Math.round((c / peak) * 46))}</span>`).join("\n");
-  $("frame").innerHTML =
-    `<b>ReplayHouse: prioritized replay — ClickHouse running in this tab</b>\n` +
-    `step ${String(state.step).padEnd(6)} mode <b>${state.mode}</b>` +
-    `${state.paused ? "   [paused]" : ""}\n\n` +
-    `loss ${state.losses.at(-1).toFixed(4).padStart(8)}  ${spark}\n\n` +
-    `priority histogram (live query; range ${lo.toFixed(2)}–${hi.toFixed(2)})\n` +
-    `${bars}\n\n` +
-    `sampled-batch mean priority ${sMean.toFixed(3)} vs population ` +
-    `${popMean.toFixed(3)}  (<b>${(sMean / Math.max(popMean, 1e-9)).toFixed(2)}x</b>)\n` +
-    `share of batch from top-decile priority: <b>${Math.round(topShare * 100)}%</b>`;
-}
-
-$("load").onclick = loadEngine;
-$("mode").onclick = toggleMode;
-$("pause").onclick = togglePause;
-$("reset").onclick = () => reset();
-function toggleMode() {
-  state.mode = state.mode === "prioritized" ? "uniform" : "prioritized";
-  $("mode").textContent = state.mode === "prioritized"
-    ? "Switch to uniform [u]" : "Switch to prioritized [u]";
-}
-function togglePause() {
-  state.paused = !state.paused;
-  $("pause").textContent = state.paused ? "Resume [space]" : "Pause [space]";
-}
-addEventListener("keydown", (e) => {
-  if (!store || e.target.tagName === "BUTTON") return;
-  if (e.key === "u") toggleMode();
-  if (e.key === " ") { e.preventDefault(); togglePause(); }
-});
+  el("dl").hidden = true;
+  el("loadmsg").textContent = "engine ready — a full ClickHouse is now running on this page";
+  const conn = await db.connect();
+  const store = await Store.open(conn);
+  for (const s of ["act-scale", "act-data", "act-learn"])
+    el(s).setAttribute("aria-disabled", "false");
+  initBench({ store, conn });
+  const { initData } = await import("./data.js").catch(() => ({ initData: null }));
+  if (initData) initData({ db, store });
+  const { initLearn } = await import("./learn.js").catch(() => ({ initLearn: null }));
+  if (initLearn) initLearn({ store });
+};
 ```
 
-Implementation note: `Store` exposes `_exec` from Task 1 (it's on the class); if the reset-drop pattern needs a public method, add `async drop(name)` to `Store` (drops both tables with `IF EXISTS`) and use it here instead — reviewer's choice, prefer the public `drop`.
+(The dynamic `import().catch` guards let Task 2 ship before Tasks 3-4 exist; each later task deletes its guard by shipping the module.)
 
-- [ ] **Step 4: Manual verification (documented in the report)**
+- [ ] **Step 4: `web/bench.js`** — Act 1:
 
-Run: `npm --prefix web run serve` then open `http://localhost:8099`, click Load engine, verify: frame animates, ratio > 1 in prioritized mode, toggling uniform drops it, Reset works. Record observed ratio values in the task report. (No headless-browser CI for the page itself — the contract tests carry CI; state this in the report.)
+```javascript
+import { el, fmtMs } from "./app.js";
 
-- [ ] **Step 5: Commit**
+const DRAW_SQL = (side) => `SELECT id FROM \`${side}\` FINAL
+WHERE priority > 0
+ORDER BY -log(1 - randCanonical()) / priority ASC
+LIMIT 8192`;
+
+export function initBench({ store }) {
+  let rows = 0, created = false;
+  for (const b of el("act-scale").querySelectorAll("button[data-n]")) {
+    b.onclick = async () => {
+      const n = Number(b.dataset.n);
+      b.disabled = true; el("draw").disabled = true;
+      el("genmsg").textContent = `generating ${n.toLocaleString()} rows in the engine…`;
+      const t0 = performance.now();
+      if (!created) {
+        await store.create("bench", { reward: "Float32" });
+        created = true;
+      }
+      const CHUNK = 1_000_000;
+      for (let done = 0; done < n; done += CHUNK) {
+        const c = Math.min(CHUNK, n - done);
+        await store._exec(`INSERT INTO bench (id, reward)
+          SELECT generateUUIDv7(), toFloat32(randCanonical()) FROM numbers(${c})`);
+        el("genmsg").textContent =
+          `generating… ${Math.min(done + c, n).toLocaleString()} / ${n.toLocaleString()}`;
+      }
+      await store._exec(`INSERT INTO bench__priorities
+        SELECT id, toFloat32(0.01 + pow(randCanonical(), 3) * 10), 1
+        FROM bench WHERE id NOT IN (SELECT id FROM bench__priorities)`);
+      rows += n;
+      el("genmsg").textContent =
+        `${rows.toLocaleString()} rows live in this tab (${fmtMs(performance.now() - t0)} to generate)`;
+      el("draw").disabled = false;
+    };
+  }
+  el("draw").onclick = async () => {
+    el("draw").disabled = true;
+    const sql = DRAW_SQL("bench__priorities");
+    const t0 = performance.now();
+    const got = await store.query(sql);
+    const ms = performance.now() - t0;
+    el("drawstat").innerHTML =
+      `<b>${fmtMs(ms)}</b> — ${got.length.toLocaleString()} rows drawn, ` +
+      `weighted + without replacement, over <b>${rows.toLocaleString()}</b> rows`;
+    el("drawsql").textContent = sql;
+    el("draw").disabled = false;
+  };
+}
+```
+
+Implementation note: the draw uses the `FINAL` read path (6-7x faster than the argMax CTE per `benchmarks/RESULTS.md`) with the SQL displayed verbatim — the page IS the benchmark, so it gets the fast honest query; Act 3 uses `Store.sample` (the Python-contract path) as its point is contract parity, not speed.
+
+- [ ] **Step 5: Manual verification + commit**
+
+Run `npm --prefix web run serve`, open http://localhost:8099, load engine, generate 1M then 10M, click Sample — record observed latencies in the task report (expect ~60ms @ 1M, ~600ms-1s @ 10M in-browser; Node spike says 58/561ms). Verify Acts 2-3 render disabled without erroring (dynamic-import guards).
 
 ```bash
-git add web/index.html web/playground.js web/serve.mjs web/replayhouse.js
-git commit -m "feat: browser playground - the PER demo over chdb-wasm in a tab"
+git add web/index.html web/app.js web/bench.js web/serve.mjs
+git commit -m "feat: playground shell + act 1 - live weighted-draw benchmark at up to 10M rows"
 ```
 
----
-
-### Task 3: gh-pages deploy + README
+### Task 3: Act 2 — drop your own data
 
 **Files:**
-- Create: `web/deploy.sh`
-- Modify: `README.md`
+- Create: `web/data.js`
 
 **Interfaces:**
-- Consumes: the `web/` tree from Tasks 1-2; `node_modules/chdb-wasm/dist/st/` (single-threaded bundle: `chdb.mjs`, `chdb.wasm`, `index.js` glue — copy whatever `dist/st/` contains).
-- Produces: `web/deploy.sh` that builds a `gh-pages` worktree containing `index.html`, `playground.js`, `replayhouse.js`, and `engine/` (the st bundle), commits, and pushes; README "Try it in your browser" line.
+- Consumes: `el`, `fmtMs` from `./app.js`; `db.putFile(path, Uint8Array)`; `file('/drop.ext', FORMAT)` table function; DOM nodes `#drop`, `#datactl`, `#wcol`, `#dsample`, `#datamsg`, `#dataout` from Task 2's shell.
+- Produces: `export function initData({ db, store })`. Behavior: dragover/dragleave toggle `.hot`; on drop, read the File as ArrayBuffer, `putFile('/drop.<ext>', bytes)`, pick format by extension (`csv → CSVWithNames`, `parquet → Parquet`, `json/jsonl/ndjson → JSONEachRow`; anything else → message "csv, parquet, or jsonl please"); run `DESCRIBE file('/drop.<ext>', '<FMT>')` to list columns, populate `#wcol` with numeric-typed columns (types matching `/Int|Float|Decimal/`); `#dsample` runs a weighted draw of 10 by `greatest(toFloat64(<col>), 0.000001)` (keeps weights positive without excluding rows) timed with `performance.now`, rendering the sampled rows as an HTML table **via `textContent`** (never innerHTML with user data — XSS), plus `#datamsg` = "10 of <count> rows, weighted by <col>, in <ms> — your file never left this tab". Errors (bad file, no numeric columns) land in `#datamsg` as plain text.
 
-- [ ] **Step 1: Write `web/deploy.sh`**
+- [ ] **Step 1: Write `web/data.js`** (complete implementation per the interface above — the drop handler, format sniff, DESCRIBE, select population, sample + safe table render; ~90 lines).
 
-```bash
-#!/usr/bin/env bash
-# Assemble and push the playground to the gh-pages branch.
-# The ~99MB wasm lives ONLY on gh-pages, never on main.
-set -euo pipefail
-cd "$(dirname "$0")/.."
+```javascript
+import { el, fmtMs } from "./app.js";
 
-test -d web/node_modules/chdb-wasm || { echo "run: npm --prefix web install"; exit 1; }
+const FMT = { csv: "CSVWithNames", parquet: "Parquet", json: "JSONEachRow",
+              jsonl: "JSONEachRow", ndjson: "JSONEachRow" };
 
-WT=$(mktemp -d)
-git worktree add "$WT" gh-pages 2>/dev/null || {
-  git worktree add --detach "$WT"
-  git -C "$WT" checkout --orphan gh-pages
-  git -C "$WT" rm -rf --quiet . 2>/dev/null || true
+export function initData({ db, store }) {
+  const drop = el("drop");
+  let path = null, fmt = null, count = 0;
+
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("hot"); };
+  drop.ondragleave = () => drop.classList.remove("hot");
+  drop.ondrop = async (e) => {
+    e.preventDefault(); drop.classList.remove("hot");
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    const ext = f.name.split(".").pop().toLowerCase();
+    fmt = FMT[ext];
+    if (!fmt) { el("datamsg").textContent = "csv, parquet, or jsonl please"; el("datactl").hidden = false; return; }
+    path = `/drop.${ext}`;
+    await db.putFile(path, new Uint8Array(await f.arrayBuffer()));
+    try {
+      const cols = await store.query(`DESCRIBE file('${path}', '${fmt}')`);
+      const numeric = cols.filter((c) => /Int|Float|Decimal/.test(c.type));
+      if (!numeric.length) { el("datamsg").textContent = "no numeric columns to weight by"; return; }
+      const sel = el("wcol");
+      sel.replaceChildren(...numeric.map((c) => new Option(`${c.name} (${c.type})`, c.name)));
+      [{ c: count }] = await store.query(`SELECT count() AS c FROM file('${path}', '${fmt}')`);
+      drop.textContent = `${f.name} — ${Number(count).toLocaleString()} rows, read into the in-page engine`;
+      el("datactl").hidden = false;
+      el("datamsg").textContent = "";
+    } catch (err) {
+      el("datamsg").textContent = `could not read file: ${String(err).slice(0, 160)}`;
+    }
+  };
+
+  el("dsample").onclick = async () => {
+    const col = el("wcol").value;
+    const t0 = performance.now();
+    let rows;
+    try {
+      rows = await store.query(`SELECT * FROM file('${path}', '${fmt}')
+        ORDER BY -log(1 - randCanonical()) / greatest(toFloat64(\`${col}\`), 0.000001) ASC
+        LIMIT 10`);
+    } catch (err) {
+      el("datamsg").textContent = `sample failed: ${String(err).slice(0, 160)}`; return;
+    }
+    const ms = performance.now() - t0;
+    el("datamsg").textContent =
+      `10 of ${Number(count).toLocaleString()} rows, weighted by ${col}, in ${fmtMs(ms)} — your file never left this tab`;
+    const table = document.createElement("table");
+    const keys = Object.keys(rows[0] ?? {});
+    const thead = table.createTHead().insertRow();
+    for (const k of keys) { const th = document.createElement("th"); th.textContent = k; thead.appendChild(th); }
+    for (const r of rows) {
+      const tr = table.insertRow();
+      for (const k of keys) tr.insertCell().textContent = String(r[k]);
+    }
+    el("dataout").replaceChildren(table);
+  };
 }
-
-rm -rf "$WT"/{index.html,playground.js,replayhouse.js,engine}
-cp web/index.html web/playground.js web/replayhouse.js "$WT/"
-mkdir -p "$WT/engine"
-cp -R web/node_modules/chdb-wasm/dist/st/. "$WT/engine/"
-cp web/node_modules/chdb-wasm/dist/index.js "$WT/engine/" 2>/dev/null || true
-touch "$WT/.nojekyll"
-
-git -C "$WT" add -A
-git -C "$WT" commit -m "deploy playground $(git rev-parse --short HEAD)" || echo "nothing to deploy"
-git -C "$WT" push -u origin gh-pages
-git worktree remove "$WT"
-echo "enable Pages once with:"
-echo "  gh api repos/{owner}/{repo}/pages -X POST -f 'source[branch]=gh-pages' -f 'source[path]=/'"
 ```
 
-Run: `chmod +x web/deploy.sh`. Do NOT run the deploy in this task — pushing gh-pages and enabling Pages is the controller/user's release step (the repo is currently private; Pages on a private repo requires a paid plan or making the repo public — surface this in the report).
+Note: the weight-column name comes from DESCRIBE output (engine-provided), not free text — backtick-quoted; still, validate it against `^[A-Za-z_][A-Za-z0-9_]*$` and fall back to an error message if a column name doesn't match (exotic Parquet column names get skipped from the select rather than interpolated).
 
-- [ ] **Step 2: README**
+- [ ] **Step 2: Node smoke for the SQL shapes** — add `web/test/filedrop.test.mjs`: `putFile` a small CSV, DESCRIBE it, run the exact `greatest(toFloat64(...))` weighted-sample SQL, assert 5 rows return. (The DOM layer is manually verified; the SQL contract is CI-tested.)
 
-Add under the Examples GIF caption:
-
-```markdown
-**Try it in your browser:** the same demo runs on ClickHouse compiled to
-WebAssembly — no install — once deployed via `web/deploy.sh` (see
-[`web/`](web/)). Locally: `npm --prefix web install && npm --prefix web run serve`.
-```
-
-- [ ] **Step 3: Full Python suite + commit**
-
-Run: `.venv/bin/pytest tests -q` (93 with node present).
+- [ ] **Step 3: Manual verification** (drop a real CSV and a Parquet; record in report), full suite, commit:
 
 ```bash
-git add web/deploy.sh README.md
-git commit -m "feat: gh-pages deploy script for the wasm playground"
+git add web/data.js web/test/filedrop.test.mjs
+git commit -m "feat: act 2 - drop a csv/parquet, weighted-sample it locally"
 ```
 
----
+### Task 4: Act 3 — the learning loop
 
-## Self-Review Notes
+**Files:**
+- Create: `web/learn.js`
+- Modify: `web/package.json` (revert test script to `"node --test test/"` — parked finding from Task 1's fix round)
 
-- **Honesty constraint:** every rendered stat in `playground.js` derives from `store.query`/`sample`/`updatePriorities` against the wasm engine; the JS model's loss is the real training loss. No simulated numbers.
-- **Contract fidelity:** `sampleKey` and the three phase-1 branches mirror `sampling.py` exactly (incl. `m.id` in join mode); divergences are documented in-code (UUIDv4 vs v7, `Date.now()*1000` versions).
-- **Type consistency:** `Store.open/create/insert/sample/updatePriorities/query` names match between Task 1 tests and Task 2 usage; the one flagged seam (`_exec` vs a public `drop`) is explicitly delegated to Task 2's implementer with a stated preference.
-- **Deploy honesty:** the 99 MB bundle stays off `main`; Pages-on-private-repo constraint is surfaced rather than hidden.
-- **Placeholder scan:** clean.
+**Interfaces:**
+- Consumes: `Store` via `initLearn({ store })`; DOM nodes `#frame`, `#mode`, `#pause`, `#reset`; `el` from app.js.
+- Produces: the PER loop from the original plan's `playground.js`, adapted: table name `demo`, N=2000, batch 256, JS linear model, `store.sample` (contract path), `updatePriorities(|error|, floor 0.01)`, frame rendered into `#frame` each tick (140ms interval), keys `u`/`space` (guarded to ignore when Act 2's select has focus). **Histogram labels are the improved form:** first bar labeled `easy`, last bar labeled `hard`, middle bars unlabeled — no `bin N` text (user feedback: bin numbers were opaque); each bar also shows its count. The stats comment from the terminal demo applies (stats read post-update; keep the ratio line labeled "sampled-batch mean priority ... vs population").
+
+- [ ] **Step 1: Write `web/learn.js`** — port the original plan's `playground.js` `reset/step/render` logic with: `export function initLearn({ store })`; drop `loadEngine` (app.js owns boot); use `store.drop?.("demo")` if present else `_exec` DROP IF EXISTS for both tables on reset; histogram render replaces `bin ${i}` with left-column labels `easy` (first row), `hard` (last row), blank otherwise, right-aligned counts; interval stored so Reset restarts cleanly; buttons enable once initLearn runs.
+
+- [ ] **Step 2: Manual verification** (ratio >1 prioritized, collapses on u, reset works; record values), full suite, commit:
+
+```bash
+git add web/learn.js web/package.json
+git commit -m "feat: act 3 - the learning loop with easy/hard histogram labels"
+```
+
+### Task 5: gh-pages deploy script + README
+
+Identical to the original plan's Task 3 (deploy.sh assembling `index.html app.js bench.js data.js learn.js replayhouse.js engine/` into a gh-pages worktree; `.nojekyll`; do NOT push in-task; Pages-on-private-repo constraint surfaced in the report). README: replace the earlier "Try it in your browser" note with the three-act description and local-dev commands. Full Python suite green; commit `feat: gh-pages deploy script for the wasm playground`.
+
+## Self-Review Notes (amendment)
+
+- Spike-grounded claims only: 10M/561ms comes from a measured Node run; the page displays live measurements, never these cached numbers.
+- Act 1 uses FINAL (fast path, SQL displayed); Act 3 uses the Store contract (parity path) — the distinction is deliberate and noted in Task 2.
+- XSS: all user-file values rendered via textContent; column names validated before interpolation.
+- The parked package.json test-script finding lands in Task 4 (the next task touching web/package.json).
+- Placeholder scan: Task 4 Step 1 describes a port of code fully specified earlier in this same plan file (original Task 2's playground.js listing, still present above the amendment) — the implementer has the complete source to port.
