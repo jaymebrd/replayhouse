@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/**/*.test.mjs",
+    "test": "node --test",
     "serve": "node serve.mjs"
   },
   "devDependencies": {
