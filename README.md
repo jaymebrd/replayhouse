@@ -96,6 +96,12 @@ and pressing `u` switches to uniform sampling — the sampled-batch priority
 ratio collapses from ~1.4x toward ~0.9x, then recovers on re-prioritize.
 Re-record with `vhs examples/demo.tape`.*
 
+**Try it in your browser:** the playground runs the full ClickHouse engine as
+WebAssembly on the page — generate up to 10M rows and time weighted draws
+live, drop your own CSV/Parquet and sample it locally (nothing uploads), and
+watch the prioritized-replay loop learn. Deploy with `web/deploy.sh`; run
+locally with `npm --prefix web install && npm --prefix web run serve`.
+
 - [`examples/demo.py`](examples/demo.py) — watch prioritized replay happen:
   a live terminal animation where the histogram is a real query over the
   priority sidecar and `[u]` flips between prioritized and uniform sampling.
