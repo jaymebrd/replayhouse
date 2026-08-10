@@ -13,11 +13,14 @@ export function initData({ db, store }) {
   drop.ondragleave = () => drop.classList.remove("hot");
   drop.ondrop = async (e) => {
     e.preventDefault(); drop.classList.remove("hot");
+    el("dataout").replaceChildren();
+    el("datactl").hidden = true;
+    el("datamsg").textContent = "";
     const f = e.dataTransfer.files?.[0];
     if (!f) return;
     const ext = f.name.split(".").pop().toLowerCase();
     fmt = FMT[ext];
-    if (!fmt) { el("datamsg").textContent = "csv, parquet, or jsonl please"; el("datactl").hidden = false; return; }
+    if (!fmt) { el("datamsg").textContent = "csv, parquet, or jsonl please"; return; }
     path = `/drop.${ext}`;
     await db.putFile(path, new Uint8Array(await f.arrayBuffer()));
     try {
