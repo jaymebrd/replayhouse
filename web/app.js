@@ -6,7 +6,7 @@ export const fmtMs = (x) => x >= 1000 ? `${(x / 1000).toFixed(2)}s` : `${Math.ro
 
 async function resolveBase() {
   try {
-    const r = await fetch("./engine/chdb.mjs", { method: "HEAD" });
+    const r = await fetch("./engine/index.js", { method: "HEAD" });
     if (r.ok) return "./engine";
   } catch {}
   return "./node_modules/chdb-wasm/dist";

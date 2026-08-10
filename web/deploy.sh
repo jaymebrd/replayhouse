@@ -15,9 +15,15 @@ git worktree add "$WT" gh-pages 2>/dev/null || {
 
 rm -rf "$WT"/{index.html,app.js,bench.js,data.js,learn.js,replayhouse.js,engine}
 cp web/index.html web/app.js web/bench.js web/data.js web/learn.js web/replayhouse.js "$WT/"
-mkdir -p "$WT/engine"
-cp -R web/node_modules/chdb-wasm/dist/st/. "$WT/engine/"
-cp web/node_modules/chdb-wasm/dist/index.js "$WT/engine/" 2>/dev/null || true
+mkdir -p "$WT/engine/st"
+cp web/node_modules/chdb-wasm/dist/*.js "$WT/engine/"          # glue: index/async/status/platform/bindings/worker/protocol
+cp -R web/node_modules/chdb-wasm/dist/st/. "$WT/engine/st/"    # st bundle, nested as selectBundle expects
+# Deliberately NOT copying dist/chdb.mjs + dist/chdb.wasm (mt bundle) — GitHub Pages cannot serve COOP/COEP
+# headers, so selectBundle will never use the mt bundle. Keeps gh-pages 99MB lighter and still functional.
+# Sanity check: the deployed page must be able to boot
+for f in engine/index.js engine/async.js engine/platform.js engine/st/chdb.mjs engine/st/chdb.wasm; do
+  test -f "$WT/$f" || { echo "engine bundle incomplete: missing $f"; exit 1; }
+done
 touch "$WT/.nojekyll"
 
 git -C "$WT" add -A
