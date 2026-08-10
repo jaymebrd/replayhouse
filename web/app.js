@@ -25,8 +25,11 @@ el("load").onclick = async () => {
       return;
     }
     el("dl").hidden = false;
+    // worker-side dynamic import resolves relative URLs against the worker script, not the page — absolutize here.
+    const moduleUrl = new URL(bundle.moduleUrl, location.href).href;
+    const wasmUrl = bundle.wasmUrl ? new URL(bundle.wasmUrl, location.href).href : undefined;
     const db = await AsyncChdb.create({
-      moduleUrl: bundle.moduleUrl, wasmUrl: bundle.wasmUrl,
+      moduleUrl, wasmUrl,
       onProgress: (l, t) => { el("dl").value = (l / t) * 100; },
     });
     el("dl").hidden = true;
