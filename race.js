@@ -1,6 +1,6 @@
-import { el, stage } from "./app.js";
-import { quantize, assemble } from "./gif.js";
-import { RES, N, BATCH, makeNet, forward, trainRows } from "./net.js";
+import { el, stage } from "./app.js?v=1d6b5aa";
+import { quantize, assemble } from "./gif.js?v=1d6b5aa";
+import { RES, N, BATCH, makeNet, forward, trainRows } from "./net.js?v=1d6b5aa";
 
 // The hero act: two identical neural nets race to paint a photo, pixel by pixel.
 // One draws its training batches uniformly, the other by error priority — and

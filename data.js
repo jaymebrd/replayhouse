@@ -1,4 +1,4 @@
-import { el, fmtMs } from "./app.js";
+import { el, fmtMs } from "./app.js?v=1d6b5aa";
 
 const FMT = { csv: "CSVWithNames", parquet: "Parquet", json: "JSONEachRow",
               jsonl: "JSONEachRow", ndjson: "JSONEachRow" };

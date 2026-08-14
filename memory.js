@@ -1,7 +1,7 @@
-import { el, stage } from "./app.js";
-import { RES, N, BATCH, makeNet, forward, trainRows } from "./net.js";
-import { quantize, assemble } from "./gif.js";
-import { defaultScene } from "./race.js";
+import { el, stage } from "./app.js?v=1d6b5aa";
+import { RES, N, BATCH, makeNet, forward, trainRows } from "./net.js?v=1d6b5aa";
+import { quantize, assemble } from "./gif.js?v=1d6b5aa";
+import { defaultScene } from "./race.js?v=1d6b5aa";
 
 // Act 1: why replay buffers exist. A spotlight sweeps across the photo — the
 // present, which an agent only lives once. One student trains only on the

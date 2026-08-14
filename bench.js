@@ -1,4 +1,4 @@
-import { el, fmtMs } from "./app.js";
+import { el, fmtMs } from "./app.js?v=1d6b5aa";
 
 const DRAW_SQL = (side) => `SELECT id FROM \`${side}\` FINAL
 WHERE priority > 0
