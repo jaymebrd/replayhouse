@@ -8,6 +8,9 @@ import { el } from "./app.js";
 
 const RES = 96, N = RES * RES, BATCH = 1024, SUB = 256, FEATS = 96, HID = 64;
 const FDIM = FEATS * 2, LR = 2e-3, PRIO_FLOOR = 0.003;
+// The finish line: a learner is done when its worst-decile pixels are sharp
+// (this is what the eye judges — aggregate PSNR is dominated by easy pixels).
+const FINISH_DB = 22, STEP_CAP = 900;
 
 // ---------- deterministic init ----------
 function mulberry32(a) {
@@ -146,11 +149,14 @@ function adam(net, k, g, scale) {
   const w = net[k], m = net["m" + k], v = net["v" + k];
   const b1 = 0.9, b2 = 0.999, eps = 1e-8, t = net.t;
   const c1 = 1 - Math.pow(b1, t), c2 = 1 - Math.pow(b2, t);
+  // decay the step size as training matures — a fixed lr keeps taking big
+  // noisy steps at convergence and the painted image visibly shimmers
+  const lr = LR / (1 + t / 600);
   for (let i = 0; i < w.length; i++) {
     const gi = g[i] * scale;
     m[i] = b1 * m[i] + (1 - b1) * gi;
     v[i] = b2 * v[i] + (1 - b2) * gi * gi;
-    w[i] -= LR * (m[i] / c1) / (Math.sqrt(v[i] / c2) + eps);
+    w[i] -= lr * (m[i] / c1) / (Math.sqrt(v[i] / c2) + eps);
   }
 }
 
@@ -268,7 +274,10 @@ async function startRace(srcCanvas) {
 
   const netU = makeNet(7), netP = makeNet(7); // identical twins
   const prioView = new Float32Array(N).fill(1); // latest heatmap query result
-  let step = 0, queries = 0, samples = 0, psnrU = 0, psnrP = 0;
+  let step = 0, queries = 0, samples = 0;
+  let evalU = { overall: 0, hard: 0 }, evalP = { overall: 0, hard: 0 };
+  let hitU = null, hitP = null; // when each learner crossed the finish line
+  let done = false;
   let heatBusy = false, lastHeat = 0, lastOptimize = performance.now();
   const t0 = performance.now();
 
@@ -287,22 +296,54 @@ async function startRace(srcCanvas) {
       forward(netP, p);
       d[o] = out[0] * 255; d[o + 1] = out[1] * 255; d[o + 2] = out[2] * 255; d[o + 3] = 255;
     });
-    const sorted = Float32Array.from(prioView).sort();
+    // blur the raw per-pixel priorities into attention blobs, and glow them
+    // over a dim grayscale of the photo — raw speckle told the viewer nothing
+    const blur = new Float32Array(N);
+    for (let y = 0; y < RES; y++) {
+      for (let x = 0; x < RES; x++) {
+        let s = 0, m = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= RES) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx;
+            if (xx < 0 || xx >= RES) continue;
+            s += prioView[yy * RES + xx]; m += 1;
+          }
+        }
+        blur[y * RES + x] = s / m;
+      }
+    }
+    const sorted = Float32Array.from(blur).sort();
     const p95 = Math.max(sorted[Math.floor(N * 0.95)] || 1, 0.03);
     render(el("rheat"), (p, d, o) => {
-      const v = Math.min(Math.sqrt(prioView[p] / p95), 1);
-      d[o] = 232 * v; d[o + 1] = 134 * v; d[o + 2] = 63 * v; d[o + 3] = 255;
+      const lum = (target[p * 3] * 0.3 + target[p * 3 + 1] * 0.6 + target[p * 3 + 2] * 0.1) * 60;
+      const v = Math.min(Math.sqrt(blur[p] / p95), 1);
+      d[o] = Math.min(255, lum + 225 * v);
+      d[o + 1] = Math.min(255, lum + 120 * v);
+      d[o + 2] = Math.min(255, lum + 40 * v);
+      d[o + 3] = 255;
     });
   }
 
-  function psnr(net) {
-    let se = 0, m = 0;
+  // overall PSNR plus PSNR of the worst decile of pixels (each net's own worst)
+  function evalNet(net) {
+    const pe = [];
+    let se = 0;
     for (let p = 0; p < N; p += 8) {
-      m += 1;
       forward(net, p);
-      for (let c = 0; c < 3; c++) { const e = out[c] - target[p * 3 + c]; se += e * e; }
+      let e2 = 0;
+      for (let c = 0; c < 3; c++) { const e = out[c] - target[p * 3 + c]; e2 += e * e; }
+      se += e2; pe.push(e2);
     }
-    return -10 * Math.log10(se / (m * 3));
+    pe.sort((a, b) => b - a);
+    const nHard = Math.max(1, Math.floor(pe.length * 0.1));
+    let hs = 0;
+    for (let i = 0; i < nHard; i++) hs += pe[i];
+    return {
+      overall: -10 * Math.log10(se / (pe.length * 3)),
+      hard: -10 * Math.log10(hs / (nHard * 3)),
+    };
   }
 
   async function refreshHeat() {
@@ -320,7 +361,7 @@ async function startRace(srcCanvas) {
   }
 
   paint();
-  while (g === gen) {
+  while (g === gen && !done) {
     if (paused) { await new Promise((r) => setTimeout(r, 120)); continue; }
     try {
       const [u, p] = await Promise.all([
@@ -335,9 +376,14 @@ async function startRace(srcCanvas) {
       // each sample is 2 queries (weighted id draw + fetch), plus the write-back
       queries += 5; samples += u.rows.length + p.rows.length; step += 1;
       if (g !== gen) return;
-      if (step % 3 === 0) { psnrU = psnr(netU); psnrP = psnr(netP); }
-      paint();
       const now = performance.now();
+      const secs = (now - t0) / 1000;
+      if (step % 3 === 0) {
+        evalU = evalNet(netU); evalP = evalNet(netP);
+        if (!hitU && evalU.hard >= FINISH_DB) hitU = { step, secs };
+        if (!hitP && evalP.hard >= FINISH_DB) hitP = { step, secs };
+      }
+      paint();
       if (now - lastHeat > 1000) { lastHeat = now; refreshHeat(); }
       if (now - lastOptimize > 20000) {
         lastOptimize = now;
@@ -346,15 +392,40 @@ async function startRace(srcCanvas) {
         store._exec("OPTIMIZE TABLE photo__priorities FINAL")
           .then(() => { queries += 1; }, () => {});
       }
-      const secs = (now - t0) / 1000;
+      if ((hitU && hitP) || step >= STEP_CAP) {
+        finishRace();
+        return;
+      }
       el("racestat").textContent =
         `step ${step} · ${Math.round(samples / secs).toLocaleString()} samples/s ` +
         `through the store · ${queries.toLocaleString()} queries · ` +
-        `PSNR uniform ${psnrU.toFixed(1)} dB vs prioritized ${psnrP.toFixed(1)} dB`;
+        `sharpness of hardest pixels: uniform ${evalU.hard.toFixed(1)} dB vs ` +
+        `prioritized ${evalP.hard.toFixed(1)} dB (finish at ${FINISH_DB})`;
     } catch (err) {
       if (g !== gen) return;
       console.warn("race step failed:", err?.message ?? err);
       await new Promise((r) => setTimeout(r, 300));
     }
+  }
+
+  function finishRace() {
+    done = true;
+    paint();
+    refreshHeat();
+    const t = (h) => (h ? `${h.secs.toFixed(0)}s` : `not sharp by step ${STEP_CAP}`);
+    let line;
+    if (hitU && hitP) {
+      const [win, lose, wName, lName] = hitP.secs <= hitU.secs
+        ? [hitP, hitU, "prioritized", "uniform"] : [hitU, hitP, "uniform", "prioritized"];
+      line = `🏁 ${wName} got every patch sharp in ${t(win)} — ${lName} needed ` +
+        `${t(lose)} (${(lose.secs / win.secs).toFixed(1)}x longer)`;
+    } else {
+      line = `🏁 time! prioritized ${t(hitP)} vs uniform ${t(hitU)}`;
+    }
+    el("racestat").textContent =
+      `${line} · ${samples.toLocaleString()} samples, ${queries.toLocaleString()} ` +
+      `real queries through the store`;
+    el("rpause").textContent = "Race again";
+    el("rpause").onclick = () => startRace(srcCanvas);
   }
 }
