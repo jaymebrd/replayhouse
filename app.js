@@ -1,4 +1,4 @@
-import { Store } from "./replayhouse.js?v=1d6b5aa";
+import { Store } from "./replayhouse.js?v=ae55d46";
 
 export const el = (id) => document.getElementById(id);
 // One demo act drives the engine at a time: starting an act calls the previous
@@ -14,6 +14,14 @@ async function resolveBase() {
   return "./node_modules/chdb-wasm/dist";
 }
 
+// The engine is a 99 MB multithreaded wasm build needing Memory64 +
+// SharedArrayBuffer — most phone browsers can't run it, and people do try
+// phones first. Tell them the one useful thing instead of a spec list.
+const MOBILE = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+const MOBILE_HINT =
+  "this one needs a laptop, sorry — the demo runs a full multithreaded " +
+  "ClickHouse as WebAssembly, which phone browsers can't do yet";
+
 el("load").onclick = async () => {
   el("load").disabled = true;
   el("loadmsg").textContent = "resolving bundle…";
@@ -22,7 +30,7 @@ el("load").onclick = async () => {
   // bundle needs SharedArrayBuffer + crossOriginIsolated, so bail out clearly here
   // rather than letting selectBundle silently fall back / fail deep inside AsyncChdb.
   if (!self.crossOriginIsolated) {
-    el("loadmsg").textContent =
+    el("loadmsg").textContent = MOBILE ? MOBILE_HINT :
       "this page needs cross-origin isolation for the multi-threaded engine — serve it over HTTP";
     el("load").disabled = false;
     return;
@@ -32,7 +40,7 @@ el("load").onclick = async () => {
     const { AsyncChdb, selectBundle } = await import(`${base}/index.js`);
     const bundle = selectBundle({ baseUrl: base });
     if (!bundle.supported) {
-      el("loadmsg").textContent = bundle.reasons.join("; ");
+      el("loadmsg").textContent = MOBILE ? MOBILE_HINT : bundle.reasons.join("; ");
       el("load").disabled = false;
       return;
     }
@@ -62,16 +70,18 @@ el("load").onclick = async () => {
       el(s)?.setAttribute("aria-disabled", "false");
     // A failed act module must not kill the other — but it must say so, not
     // leave a live-looking dead section.
-    await import("./race.js?v=1d6b5aa").then((m) => m.initRace({ store }), (err) => {
+    await import("./race.js?v=ae55d46").then((m) => m.initRace({ store }), (err) => {
       console.error(err);
       el("racestat").textContent = `this act failed to load: ${err?.message ?? err}`;
     });
-    await import("./memory.js?v=1d6b5aa").then((m) => m.initMemory({ store }), (err) => {
+    await import("./memory.js?v=ae55d46").then((m) => m.initMemory({ store }), (err) => {
       console.error(err);
       el("memstat").textContent = `this act failed to load: ${err?.message ?? err}`;
     });
   } catch (err) {
-    el("loadmsg").textContent = `failed to load the engine: ${err?.message ?? err}`;
+    el("loadmsg").textContent = MOBILE ? MOBILE_HINT :
+      `failed to load the engine: ${err?.message ?? err}`;
+    console.error(err);
     el("load").disabled = false;
     el("dl").hidden = true;
   }
