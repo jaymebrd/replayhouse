@@ -173,7 +173,7 @@ async function startStream() {
   })();
   function captureFrame(caption) {
     const { c, ctx, PANEL, GAP } = rec;
-    ctx.fillStyle = "#14161a";
+    ctx.fillStyle = "#f5efe7";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.font = "13px ui-monospace, Menlo, monospace";
     [["mstream", "the stream (the present)"], ["mnow", "no buffer"],
@@ -182,11 +182,11 @@ async function startStream() {
         const x = GAP + i * (PANEL + GAP);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(el(id), x, GAP, PANEL, PANEL);
-        ctx.fillStyle = "#9aa3ad";
+        ctx.fillStyle = "#6b6558";
         ctx.textAlign = "center";
         ctx.fillText(label, x + PANEL / 2, GAP + PANEL + 16);
       });
-    ctx.fillStyle = "#e8863f";
+    ctx.fillStyle = "#b65515";
     ctx.textAlign = "left";
     ctx.fillText(caption, GAP, GAP + PANEL + 34);
     rec.frames.push(quantize(ctx.getImageData(0, 0, c.width, c.height)));
