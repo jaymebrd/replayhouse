@@ -1,4 +1,5 @@
 import { el } from "./app.js";
+import { quantize, assemble } from "./gif.js";
 
 // The hero act: two identical neural nets race to paint a photo, pixel by pixel.
 // One draws its training batches uniformly, the other by error priority — and
@@ -239,6 +240,10 @@ let paused = false;
 async function startRace(srcCanvas) {
   const g = ++gen;
   paused = false;
+  const oldGif = el("rgif");
+  if (oldGif.href) URL.revokeObjectURL(oldGif.href);
+  oldGif.hidden = true;
+  oldGif.removeAttribute("href");
   el("rpause").textContent = "Pause";
   el("rpause").onclick = () => {
     paused = !paused;
@@ -287,6 +292,44 @@ async function startRace(srcCanvas) {
     for (let p = 0; p < N; p++) fn(p, img.data, p * 4);
     ctx.putImageData(img, 0, 0);
   }
+  // --- race recorder: one composite frame per second, quantized at capture
+  // (4 bytes/px -> 1) so a long race stays bounded; assembled into a GIF at
+  // the flag. Every frame is the live canvases — nothing re-rendered.
+  const rec = (() => {
+    const PANEL = 192, GAP = 8, CAPTION = 40;
+    const c = document.createElement("canvas");
+    c.width = PANEL * 4 + GAP * 5;
+    c.height = PANEL + GAP * 2 + CAPTION;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = false;
+    return { c, ctx, PANEL, GAP, frames: [], intervalMs: 1000, last: 0 };
+  })();
+
+  function captureFrame(caption) {
+    const { c, ctx, PANEL, GAP } = rec;
+    ctx.fillStyle = "#14161a";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.font = "13px ui-monospace, Menlo, monospace";
+    [["rorig", "the photo"], ["runi", "uniform sampling"],
+     ["rpri", "prioritized replay"], ["rheat", "where it studies"]]
+      .forEach(([id, label], i) => {
+        const x = GAP + i * (PANEL + GAP);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(el(id), x, GAP, PANEL, PANEL);
+        ctx.fillStyle = "#9aa3ad";
+        ctx.textAlign = "center";
+        ctx.fillText(label, x + PANEL / 2, GAP + PANEL + 16);
+      });
+    ctx.fillStyle = "#e8863f";
+    ctx.textAlign = "left";
+    ctx.fillText(caption, GAP, GAP + PANEL + 34);
+    rec.frames.push(quantize(ctx.getImageData(0, 0, c.width, c.height)));
+    if (rec.frames.length >= 120) { // halve into a coarser timelapse
+      rec.frames = rec.frames.filter((_, i) => i % 2 === 0);
+      rec.intervalMs *= 2;
+    }
+  }
+
   function paint() {
     render(el("runi"), (p, d, o) => {
       forward(netU, p);
@@ -384,6 +427,11 @@ async function startRace(srcCanvas) {
         if (!hitP && evalP.hard >= FINISH_DB) hitP = { step, secs };
       }
       paint();
+      if (now - rec.last >= rec.intervalMs) {
+        rec.last = now;
+        captureFrame(`replayhouse photo race · t=${secs.toFixed(0)}s · ` +
+          `${queries.toLocaleString()} ClickHouse queries in this tab`);
+      }
       if (now - lastHeat > 1000) { lastHeat = now; refreshHeat(); }
       if (now - lastOptimize > 20000) {
         lastOptimize = now;
@@ -427,5 +475,15 @@ async function startRace(srcCanvas) {
       `real queries through the store`;
     el("rpause").textContent = "Race again";
     el("rpause").onclick = () => startRace(srcCanvas);
+    captureFrame(line.replace(/^🏁 /, ""));
+    setTimeout(() => { // let the verdict paint before the ~1s encode
+      const bytes = assemble(rec.frames, { delayCs: 12, holdCs: 300 });
+      const a = el("rgif");
+      if (a.href) URL.revokeObjectURL(a.href);
+      a.href = URL.createObjectURL(new Blob([bytes], { type: "image/gif" }));
+      a.textContent =
+        `Download the race as a GIF (${(bytes.length / 1e6).toFixed(1)} MB)`;
+      a.hidden = false;
+    }, 50);
   }
 }
