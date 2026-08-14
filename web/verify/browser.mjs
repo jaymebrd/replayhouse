@@ -42,22 +42,7 @@ async function main() {
 
     await page.click("#load");
     await waitForText(page, "#loadmsg", "engine ready");
-    // "engine ready" is set before initBench enables the act buttons — clicking a
-    // still-disabled button would silently no-op, so wait for enablement, not text.
-    await page.waitForFunction(
-      () => !document.querySelector('button[data-n="100000"]')?.disabled,
-      { timeout: TIMEOUT },
-    );
     console.log("engine ready");
-
-    await page.click('button[data-n="100000"]');
-    await waitForText(page, "#genmsg", "rows live");
-    console.log("generated:", await page.$eval("#genmsg", (e) => e.textContent));
-
-    await page.click("#draw");
-    await waitForText(page, "#drawstat", "rows drawn");
-    const drawstat = await page.$eval("#drawstat", (e) => e.textContent);
-    console.log("drawstat:", drawstat);
 
     // Act 1 (memory/spotlight) autostarts — wait for real steps through the
     // store: experiences inserted and both students evaluated.
@@ -90,7 +75,7 @@ async function main() {
     if (pageErrors.length) console.error("page errors:", pageErrors.join(" | "));
     // Dump the page's visible state so a timeout is diagnosable from the log alone.
     const state = await page.evaluate(() =>
-      ["loadmsg", "genmsg", "drawstat"].map((id) =>
+      ["loadmsg", "memstat", "racestat"].map((id) =>
         `${id}=${JSON.stringify(document.getElementById(id)?.textContent ?? null)}`,
       ).join(" "),
     ).catch(() => "(state dump failed)");

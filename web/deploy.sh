@@ -13,8 +13,8 @@ git worktree add "$WT" gh-pages 2>/dev/null || {
   git -C "$WT" rm -rf --quiet . 2>/dev/null || true
 }
 
-rm -rf "$WT"/{index.html,app.js,bench.js,data.js,race.js,memory.js,net.js,gif.js,learn.js,replayhouse.js,engine,coi-serviceworker.min.js}
-cp web/index.html web/app.js web/bench.js web/data.js web/race.js web/memory.js web/net.js web/gif.js web/replayhouse.js "$WT/"
+rm -rf "$WT"/{index.html,app.js,race.js,memory.js,net.js,gif.js,learn.js,replayhouse.js,engine,coi-serviceworker.min.js}
+cp web/index.html web/app.js web/race.js web/memory.js web/net.js web/gif.js web/replayhouse.js "$WT/"
 cp web/coi-serviceworker.min.js "$WT/"
 mkdir -p "$WT/engine"
 cp web/node_modules/chdb-wasm/dist/*.js "$WT/engine/"                          # glue: index/async/status/platform/bindings/worker/protocol

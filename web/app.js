@@ -1,5 +1,4 @@
 import { Store } from "./replayhouse.js";
-import { initBench } from "./bench.js";
 
 export const el = (id) => document.getElementById(id);
 // One demo act drives the engine at a time: starting an act calls the previous
@@ -57,10 +56,9 @@ el("load").onclick = async () => {
     // starts failing with CANNOT_SCHEDULE_TASK. Cap query threads and read synchronously.
     await store._exec(
       "SET max_threads = 4, max_insert_threads = 1, local_filesystem_read_method = 'pread'");
-    for (const s of ["act-mem", "act-race", "act-scale", "act-data"])
+    for (const s of ["act-mem", "act-race"])
       el(s).setAttribute("aria-disabled", "false");
-    initBench({ store, conn });
-    // A failed act module must not kill the others — but it must say so, not
+    // A failed act module must not kill the other — but it must say so, not
     // leave a live-looking dead section.
     await import("./race.js").then((m) => m.initRace({ store }), (err) => {
       console.error(err);
@@ -69,10 +67,6 @@ el("load").onclick = async () => {
     await import("./memory.js").then((m) => m.initMemory({ store }), (err) => {
       console.error(err);
       el("memstat").textContent = `this act failed to load: ${err?.message ?? err}`;
-    });
-    await import("./data.js").then((m) => m.initData({ db, store }), (err) => {
-      console.error(err);
-      el("datamsg").textContent = `this act failed to load: ${err?.message ?? err}`;
     });
   } catch (err) {
     el("loadmsg").textContent = `failed to load the engine: ${err?.message ?? err}`;

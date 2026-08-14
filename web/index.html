@@ -155,39 +155,6 @@
   <details><summary>the query that picks what the mistake-student studies next</summary><pre id="racesql"></pre></details>
 </section>
 
-<section id="act-scale" aria-disabled="true">
-  <p class="label"><b>03</b> — scale</p>
-  <h2>Still a <em>database</em>.</h2>
-  <p class="intro">How fast is a weighted, without-replacement draw over N rows — in a browser
-  tab? Generate rows in the engine and time it yourself.</p>
-  <div class="row">
-    <button data-n="100000" disabled>100k rows</button>
-    <button data-n="1000000" disabled>1M rows</button>
-    <button data-n="5000000" disabled>5M rows</button>
-    <button data-n="10000000" disabled>10M rows</button>
-    <span id="genmsg" class="mono dim"></span>
-  </div>
-  <div class="row">
-    <button id="draw" disabled>Sample 8,192 — weighted, without replacement</button>
-  </div>
-  <div class="stat" id="drawstat"></div>
-  <p class="note">measured in your browser just now — nothing precomputed.</p>
-  <details><summary>the query that just ran</summary><pre id="drawsql"></pre></details>
-</section>
-
-<section id="act-data" aria-disabled="true">
-  <p class="label"><b>04</b> — your data</p>
-  <h2>Bring your <em>own</em> rows.</h2>
-  <div id="drop">drop a .csv or .parquet here (it is read into the in-page engine, never uploaded)</div>
-  <div class="row" id="datactl" hidden>
-    <label for="wcol" class="mono dim">weight by</label>
-    <select id="wcol"></select>
-    <button id="dsample">Weighted sample 10</button>
-    <span id="datamsg" class="mono dim"></span>
-  </div>
-  <div id="dataout"></div>
-</section>
-
 </main>
 <footer>every number on this page comes from a ClickHouse query that ran in this tab.
 engine: <a href="https://github.com/chdb-io/chdb">chdb</a> compiled to WebAssembly ·
