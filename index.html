@@ -1,0 +1,196 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReplayHouse — a ClickHouse replay buffer in your browser tab</title>
+<style>
+  :root { --bg:#f5efe7; --ink:#1b1a16; --dim:#6b6558; --accent:#b65515;
+    --accent-soft:#e8863f; --hair:#e0d6c6; --well:#ede5d8; }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); margin:0;
+    font:17px/1.65 Newsreader, Georgia, "Times New Roman", serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding:0 1.2rem 5rem; }
+  header.top { width:min(1060px, 100%); display:flex; justify-content:space-between;
+    align-items:center; padding:1.3rem 0; border-bottom:1px solid var(--hair); }
+  .wordmark, nav a { font:13px/1 "Avenir Next", Jost, Futura, "Helvetica Neue", sans-serif;
+    letter-spacing:.22em; text-transform:uppercase; color:var(--ink);
+    text-decoration:none; }
+  .wordmark b { color:var(--accent); font-weight:600; }
+  main { width:min(1060px, 100%); }
+
+  .hero { text-align:center; padding:5.5rem 0 4rem; }
+  .kicker { font:12px/1 "Avenir Next", Jost, Futura, "Helvetica Neue", sans-serif;
+    letter-spacing:.34em; text-transform:uppercase; color:var(--dim); margin:0 0 2.2rem; }
+  h1 { font:400 clamp(2.6rem, 8.5vw, 6rem)/1.05 "Avenir Next", Jost, Futura,
+    "Helvetica Neue", sans-serif; letter-spacing:.14em; text-transform:uppercase;
+    margin:0 0 2rem; }
+  h1 b { font-weight:400; color:var(--accent); }
+  .lede { font-style:italic; font-size:1.25rem; color:var(--ink); max-width:38em;
+    margin:0 auto 2.6rem; }
+
+  section { border-top:1px solid var(--hair); padding:3.6rem 0 3.2rem; }
+  section[aria-disabled="true"] { opacity:.35; pointer-events:none; }
+  .label { font:12px/1 "Avenir Next", Jost, Futura, "Helvetica Neue", sans-serif;
+    letter-spacing:.3em; text-transform:uppercase; color:var(--dim); margin:0 0 1.2rem; }
+  .label b { color:var(--accent); font-weight:500; }
+  h2 { font:400 2.1rem/1.25 Newsreader, Georgia, serif; margin:0 0 1rem; }
+  h2 em { color:var(--accent); }
+  .intro { max-width:46em; margin:0 0 1.6rem; }
+  .note { color:var(--dim); font-size:.95rem; max-width:46em; }
+
+  button, #rgif, #mgif { font:12px/1 "Avenir Next", Jost, Futura, "Helvetica Neue",
+    sans-serif; letter-spacing:.14em; text-transform:uppercase; color:var(--ink);
+    background:transparent; border:1px solid var(--ink); border-radius:999px;
+    padding:.75rem 1.4rem; cursor:pointer; text-decoration:none; }
+  button:hover, #rgif:hover, #mgif:hover { background:var(--ink); color:var(--bg); }
+  button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button[disabled] { opacity:.35; cursor:default; }
+  button[disabled]:hover { background:transparent; color:var(--ink); }
+  button.cta { background:var(--ink); color:var(--bg); padding:.95rem 1.8rem; }
+  button.cta:hover { background:var(--accent); border-color:var(--accent); }
+  #rgif, #mgif { color:var(--accent); border-color:var(--accent); }
+  #rgif:hover, #mgif:hover { background:var(--accent); color:var(--bg); }
+  .row { display:flex; gap:.8rem; flex-wrap:wrap; align-items:center; margin:.9rem 0; }
+  .hero .row { justify-content:center; }
+
+  .mono, .stat { font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .dim { color:var(--dim); font-size:.82rem; }
+  .stat { font-size:1.25rem; margin:.4rem 0; }
+  .stat b { color:var(--accent); }
+  progress { width:100%; accent-color:var(--accent); }
+
+  .race-row { display:flex; gap:.9rem; flex-wrap:wrap; margin:1.2rem 0 .4rem; }
+  .race-row figure { margin:0; flex:1 1 150px; min-width:140px; text-align:center; }
+  .race-row canvas { width:100%; image-rendering:pixelated; background:#111;
+    border:1px solid var(--hair); border-radius:3px; display:block; }
+  .race-row figcaption { font:11px/1.5 "Avenir Next", Jost, Futura, "Helvetica Neue",
+    sans-serif; letter-spacing:.12em; text-transform:uppercase; color:var(--dim);
+    padding-top:.55rem; }
+
+  pre { background:var(--well); border:1px solid var(--hair); border-radius:4px;
+    padding:.9rem 1.1rem; overflow-x:auto; white-space:pre; margin:.6rem 0 0;
+    font:12.5px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  details summary { cursor:pointer; color:var(--dim); font-style:italic; }
+  #drop, #rdrop { border:1px dashed #b7ab99; border-radius:4px; padding:1.4rem;
+    text-align:center; color:var(--dim); font-style:italic; }
+  #drop.hot, #rdrop.hot { border-color:var(--accent); color:var(--ink); }
+  #rdrop { padding:.8rem; margin-top:.9rem; }
+  table { border-collapse:collapse; margin-top:.8rem;
+    font:12.5px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  td, th { border:1px solid var(--hair); padding:.3rem .7rem; text-align:left;
+    font-variant-numeric:tabular-nums; }
+  footer { color:var(--dim); font-style:italic; font-size:.9rem;
+    border-top:1px solid var(--hair); margin-top:1rem; padding-top:1.6rem;
+    width:min(1060px, 100%); }
+  footer a { color:var(--accent); }
+</style>
+<header class="top">
+  <span class="wordmark">Replay<b>House</b></span>
+  <nav><a href="https://github.com/jaymebrd/replayhouse">GitHub</a></nav>
+</header>
+<main>
+
+<div class="hero">
+  <p class="kicker">an experience store · running entirely in this tab</p>
+  <h1>Replay<b>House</b></h1>
+  <p class="lede">A replay buffer that is just a database. The full ClickHouse engine runs
+  as WebAssembly on this page — real tables, real weighted sampling, real training loops.
+  Nothing leaves your machine.</p>
+  <div class="row">
+    <button id="load" class="cta">Load the engine — 99 MB, cached after first visit</button>
+  </div>
+  <p id="loadmsg" class="mono dim" style="text-align:center"></p>
+  <progress id="dl" max="100" value="0" hidden></progress>
+</div>
+
+<section id="act-mem" aria-disabled="true">
+  <p class="label"><b>01</b> — memory</p>
+  <h2>Forgetting is the <em>default</em>.</h2>
+  <p class="intro">The spotlight is the present. It sweeps across the photo once and never
+  comes back. <b>One student can only study what is happening right now. The other records
+  every moment into a ClickHouse table — a replay buffer — and studies its memories.</b>
+  Watch what happens to the first student's past as the spotlight moves on.</p>
+  <div class="race-row">
+    <figure><canvas id="mstream" width="96" height="96"></canvas><figcaption>the stream (the present)</figcaption></figure>
+    <figure><canvas id="mnow" width="96" height="96"></canvas><figcaption>no buffer — lives in the moment</figcaption></figure>
+    <figure><canvas id="mmem" width="96" height="96"></canvas><figcaption>replay buffer — remembers</figcaption></figure>
+    <figure><canvas id="mbuf" width="96" height="96"></canvas><figcaption>the buffer, filling up (live)</figcaption></figure>
+  </div>
+  <div class="row">
+    <button id="mreplay" disabled>Restart the stream</button>
+    <a id="mgif" hidden download="replayhouse-stream.gif">Download the stream as a GIF</a>
+    <span id="memstat" class="mono dim"></span>
+  </div>
+  <p class="note">forgetting is not a metaphor here: both students update the same way — the
+  no-buffer one simply cannot see data that is gone. the buffer is a real MergeTree table that
+  grows as moments are lived, and the replay batches are weighted draws from it.</p>
+</section>
+
+<section id="act-race" aria-disabled="true">
+  <p class="label"><b>02</b> — priorities</p>
+  <h2>Studying mistakes is <em>faster</em>.</h2>
+  <p class="intro">Two identical students race to paint a photo, a batch of pixels at a time.
+  <b>One picks pixels at random. The other keeps a ledger of its mistakes</b> — in a ClickHouse
+  table running inside this tab — and asks it for the pixels it got most wrong. Same brain,
+  same effort. First to get every patch sharp wins.</p>
+  <div class="race-row">
+    <figure><canvas id="rorig" width="96" height="96"></canvas><figcaption>the photo</figcaption></figure>
+    <figure><canvas id="runi" width="96" height="96"></canvas><figcaption>studies random pixels</figcaption></figure>
+    <figure><canvas id="rpri" width="96" height="96"></canvas><figcaption>studies its mistakes</figcaption></figure>
+    <figure><canvas id="rheat" width="96" height="96"></canvas><figcaption>the mistake ledger (live)</figcaption></figure>
+  </div>
+  <div class="row">
+    <button id="rpause" disabled>Start the race</button>
+    <a id="rgif" hidden download="replayhouse-race.gif">Download the race as a GIF</a>
+    <span id="racestat" class="mono dim"></span>
+  </div>
+  <p class="note"><b>you can interfere:</b> click or drag on the photo (or the ledger) to mark
+  a region "study this now" — the brush is a real priority write, the next batch floods with
+  those pixels, and you'll watch that patch snap into focus.</p>
+  <div id="rdrop">drop your own photo here to race on it — it never leaves this tab</div>
+  <p class="note">nothing is simulated: each practice batch is a weighted draw from a real
+  MergeTree table (this loop is prioritized experience replay — what RL and LLM post-training
+  runs do with agent experiences instead of pixels), every error is written back as a
+  priority, and the ledger panel is a live query over that table.</p>
+  <details><summary>the query that picks what the mistake-student studies next</summary><pre id="racesql"></pre></details>
+</section>
+
+<section id="act-scale" aria-disabled="true">
+  <p class="label"><b>03</b> — scale</p>
+  <h2>Still a <em>database</em>.</h2>
+  <p class="intro">How fast is a weighted, without-replacement draw over N rows — in a browser
+  tab? Generate rows in the engine and time it yourself.</p>
+  <div class="row">
+    <button data-n="100000" disabled>100k rows</button>
+    <button data-n="1000000" disabled>1M rows</button>
+    <button data-n="5000000" disabled>5M rows</button>
+    <button data-n="10000000" disabled>10M rows</button>
+    <span id="genmsg" class="mono dim"></span>
+  </div>
+  <div class="row">
+    <button id="draw" disabled>Sample 8,192 — weighted, without replacement</button>
+  </div>
+  <div class="stat" id="drawstat"></div>
+  <p class="note">measured in your browser just now — nothing precomputed.</p>
+  <details><summary>the query that just ran</summary><pre id="drawsql"></pre></details>
+</section>
+
+<section id="act-data" aria-disabled="true">
+  <p class="label"><b>04</b> — your data</p>
+  <h2>Bring your <em>own</em> rows.</h2>
+  <div id="drop">drop a .csv or .parquet here (it is read into the in-page engine, never uploaded)</div>
+  <div class="row" id="datactl" hidden>
+    <label for="wcol" class="mono dim">weight by</label>
+    <select id="wcol"></select>
+    <button id="dsample">Weighted sample 10</button>
+    <span id="datamsg" class="mono dim"></span>
+  </div>
+  <div id="dataout"></div>
+</section>
+
+</main>
+<footer>every number on this page comes from a ClickHouse query that ran in this tab.
+engine: <a href="https://github.com/chdb-io/chdb">chdb</a> compiled to WebAssembly ·
+library: <a href="https://github.com/jaymebrd/replayhouse">replayhouse</a></footer>
+<script src="./coi-serviceworker.min.js"></script>
+<script type="module" src="./app.js"></script>
