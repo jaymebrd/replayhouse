@@ -2,13 +2,15 @@
 
 Experience replay on ClickHouse.
 
-replayhouse stores agent trajectories and samples weighted training batches
-from them. It's a small Python client over ClickHouse — a server, or
-[chdb](https://github.com/chdb-io/chdb) running in-process, so there is
-nothing to deploy to try it. The idea is Reverb with a database where the
-replay server used to be: because the buffer is a table, you can filter a
-draw with a `WHERE` clause, stratify it with `LIMIT BY`, and point Grafana
-at the exact rows your trainer consumed.
+replayhouse stores experiences — agent trajectories, transitions, scored
+rollouts — and samples weighted training batches from them. It is a small
+Python client over ClickHouse: a server for scale, or
+[chdb](https://github.com/chdb-io/chdb) embedded in-process for local work
+with no infrastructure. It borrows the shape of
+[Reverb](https://github.com/google-deepmind/reverb) and replaces the replay
+server with a database. Because the buffer is a table, a draw can be
+filtered with `WHERE`, stratified with `LIMIT BY`, and the exact rows your
+trainer consumed are one `SELECT` away from a dashboard.
 
 ```python
 batch = t.sample(8192, by="priority", where="env_version >= 12")
@@ -16,27 +18,28 @@ loss, new_priorities = train_step(batch.rows)
 t.update_priorities(batch.ids, new_priorities)
 ```
 
-Sampling is weighted and without replacement (an Efraimidis–Spirakis top-k
-in plain SQL, so it parallelizes and even distributes across shards).
-Priority updates never mutate rows — they're inserts into a small sidecar
-table, resolved last-write-wins at read time — so both directions of the
-hot loop are append-only. Eviction is TTL plus capacity policies (drop
-oldest, or drop lowest-priority). On a laptop, drawing 8192 trajectories
-from a 50M-row store takes about 1.1s ([measured](benchmarks/RESULTS.md));
-updating 8k priorities takes ~100ms.
+**Demo: https://jaymebrd.github.io/replayhouse/** — the full ClickHouse
+engine compiled to WebAssembly, running prioritized-replay training loops
+in the page. Every number on it comes from a query in your tab.
 
-Status: early development, pre-PyPI.
-
-## Quick start {#quick-start}
+## Installation
 
 ```bash
-pip install replayhouse[embedded]      # embedded chdb, zero infrastructure
+pip install replayhouse[embedded]      # embedded chdb backend
 ```
+
+replayhouse is pre-PyPI; install from a checkout today:
+
+```bash
+pip install 'replayhouse[embedded] @ git+https://github.com/jaymebrd/replayhouse'
+```
+
+## Quick start
 
 ```python
 import replayhouse
 
-store = replayhouse.connect("chdb:///tmp/replay")      # or "clickhouse://host:8123/db"
+store = replayhouse.connect("chdb:///tmp/replay")   # or "clickhouse://host:8123/db"
 
 t = store.create(
     "agent_experiences",
@@ -60,7 +63,34 @@ t.update_priorities(batch.ids, [0.5] * len(batch))
 t.evict()
 ```
 
-## Training with PyTorch {#training-with-pytorch}
+## How it works
+
+**Tables.** Each buffer is two tables: an append-only `MergeTree` table
+holding the experiences, and a `ReplacingMergeTree` sidecar holding
+priorities. A priority update is an insert with a monotonic version, not a
+mutation; readers resolve last-write-wins at query time. Both directions of
+the hot loop — experiences in, priority updates back — are append-only.
+
+**Sampling.** `sample(k, by=...)` is weighted and without replacement,
+implemented as an Efraimidis–Spirakis top-k in plain SQL, so it parallelizes
+across cores and distributes across shards. `by` accepts any SQL expression
+over the row (`"priority"`, `"reward + 0.01"`, `"abs(advantage)"`), `where`
+filters the population, `stratify_by` balances groups, and `seed` makes a
+draw reproducible. Rows with non-positive weight are never drawn.
+
+**Eviction.** TTL by insertion time, plus capacity policies: `oldest` or
+`lowest_priority`, by row count or bytes. `evict()` also removes orphaned
+sidecar entries.
+
+**Backends.** `clickhouse://` speaks to a server over HTTP;
+`chdb://` runs the engine in-process. The SQL contract is identical — the
+test suite runs against both.
+
+Measured on a laptop with embedded chdb: drawing 8,192 rows from a
+50-million-row store takes about 1.1 s; updating 8k priorities about
+100 ms ([benchmarks](benchmarks/RESULTS.md)).
+
+## Training with PyTorch
 
 ```bash
 pip install 'replayhouse[embedded,torch]'
@@ -77,51 +107,46 @@ for batch in DataLoader(ds, batch_size=None, num_workers=0):
     t.update_priorities(batch.ids, new_priorities)
 ```
 
-Each item is a whole `SampleBatch` (the store does the batching) — keep
-`batch_size=None` and `num_workers=0` in the `DataLoader`. Runnable demos:
-[`examples/bandit.py`](examples/bandit.py) and
-[`examples/train_reward_model.py`](examples/train_reward_model.py).
+Each item is a whole `SampleBatch` — the store does the batching, so keep
+`batch_size=None` and `num_workers=0` in the `DataLoader`. torch is an
+optional extra; the core package does not depend on it.
 
-## Examples {#examples}
+## Examples
 
-All examples run offline against embedded chdb — no server, no keys.
+All examples run offline against embedded chdb.
 
 ![Prioritized replay demo](examples/demo.gif)
 
-*The recording is real: a model trains from the store, per-example errors
-flow back as priorities (the histogram is a live query over the sidecar),
-and pressing `u` switches to uniform sampling — the sampled-batch priority
-ratio collapses from ~1.4x toward ~0.9x, then recovers on re-prioritize.
-Re-record with `vhs examples/demo.tape`.*
+The recording is live output: a model trains from the store, per-example
+errors flow back as priorities, and pressing `u` switches between
+prioritized and uniform sampling. Re-record with `vhs examples/demo.tape`.
 
-**Try it in your browser:** the playground runs the full ClickHouse engine as
-WebAssembly on the page — generate up to 10M rows and time weighted draws
-live, drop your own CSV/Parquet and sample it locally (nothing uploads), and
-watch the prioritized-replay loop learn. Deploy with `web/deploy.sh`; run
-locally with `npm --prefix web install && npm --prefix web run serve`.
+- [`examples/demo.py`](examples/demo.py) — the terminal animation above.
+- [`examples/agent/`](examples/agent/) — record agent trajectories
+  (simulated by default, `--live` runs a real tool-use agent), then curate
+  a filtered, stratified, reward-weighted fine-tuning set and export
+  Parquet.
+- [`examples/grpo_loop.py`](examples/grpo_loop.py) — a GRPO-shaped loop:
+  group-relative advantages in, advantage-weighted sampling out.
+- [`examples/observability.py`](examples/observability.py) — six
+  Grafana-ready queries ([`observability.sql`](examples/observability.sql))
+  over the rows the trainer samples.
+- [`examples/quickstart.ipynb`](examples/quickstart.ipynb) — the API as a
+  notebook.
+- [`examples/bandit.py`](examples/bandit.py),
+  [`examples/train_reward_model.py`](examples/train_reward_model.py) —
+  single-file demos.
 
-- [`examples/demo.py`](examples/demo.py) — watch prioritized replay happen:
-  a live terminal animation where the histogram is a real query over the
-  priority sidecar and `[u]` flips between prioritized and uniform sampling.
-- [`examples/agent/`](examples/agent/) — the full pipeline: record agent
-  trajectories (simulated by default; `--live` runs a real Claude tool-use
-  agent), then `curate.py` builds a filtered, stratified, reward-weighted
-  fine-tuning set and exports Parquet.
-- [`examples/grpo_loop.py`](examples/grpo_loop.py) — a GRPO-shaped training
-  loop: group-relative advantages in, advantage-weighted sampling out,
-  priorities refreshed from `|advantage|`.
-- [`examples/observability.py`](examples/observability.py) — the same store
-  feeding dashboards: six Grafana-ready queries
-  ([`observability.sql`](examples/observability.sql)) over the rows the
-  trainer samples.
-- [`examples/quickstart.ipynb`](examples/quickstart.ipynb) — the API tour as
-  an executable notebook.
-- [`examples/bandit.py`](examples/bandit.py) and
-  [`examples/train_reward_model.py`](examples/train_reward_model.py) — small
-  single-file demos (priority-proportional bandit; prioritized-replay
-  training).
+## Browser playground
 
-## Development {#development}
+[`web/`](web/) contains the demo site: chdb compiled to WebAssembly, a JS
+mirror of the SQL contract, and two training loops that draw every batch
+from a `MergeTree` table in the tab. Run it locally with
+`npm --prefix web install && npm --prefix web run serve`, deploy with
+`web/deploy.sh`, and verify in headless Chrome with
+`npm --prefix web run verify:browser`.
+
+## Development
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev,torch]'
