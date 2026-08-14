@@ -59,12 +59,16 @@
 <progress id="dl" max="100" value="0" hidden></progress>
 
 <section id="act-race" aria-disabled="true">
-  <h2><span class="act">act 1</span>two identical learners race to paint a photo — one studies smarter</h2>
+  <h2><span class="act">act 1</span>two identical students race to paint a photo</h2>
+  <p class="dim" style="margin:.2rem 0 .8rem">Both start knowing nothing and learn by practicing
+  a batch of pixels at a time. <b>One picks pixels at random. The other keeps a ledger of its
+  mistakes</b> — in a ClickHouse table running inside this tab — and asks it for the pixels it got
+  most wrong. Same brain, same effort. First to get every patch sharp wins.</p>
   <div class="race-row">
     <figure><canvas id="rorig" width="96" height="96"></canvas><figcaption>the photo</figcaption></figure>
-    <figure><canvas id="runi" width="96" height="96"></canvas><figcaption>uniform sampling</figcaption></figure>
-    <figure><canvas id="rpri" width="96" height="96"></canvas><figcaption>prioritized replay</figcaption></figure>
-    <figure><canvas id="rheat" width="96" height="96"></canvas><figcaption>where it studies (live query)</figcaption></figure>
+    <figure><canvas id="runi" width="96" height="96"></canvas><figcaption>studies random pixels</figcaption></figure>
+    <figure><canvas id="rpri" width="96" height="96"></canvas><figcaption>studies its mistakes</figcaption></figure>
+    <figure><canvas id="rheat" width="96" height="96"></canvas><figcaption>the mistake ledger (live)</figcaption></figure>
   </div>
   <div class="row">
     <button id="rpause" disabled>Pause</button>
@@ -72,11 +76,11 @@
     <span id="racestat" class="dim"></span>
   </div>
   <div id="rdrop">drop your own photo here to race on it — it never leaves this tab</div>
-  <p class="dim">both nets get the same training budget; the only difference is which pixels
-  they pick to study. every batch is a weighted draw from a MergeTree table in this tab,
-  every per-pixel error is written back as a priority, and the heatmap is a live query
-  over the priority sidecar.</p>
-  <details><summary>the sampling query behind the prioritized learner</summary><pre id="racesql"></pre></details>
+  <p class="dim">nothing is simulated: each practice batch is a weighted draw from a real
+  MergeTree table (this loop is prioritized experience replay — what RL and LLM post-training
+  runs do with agent experiences instead of pixels), every error is written back as a
+  priority, and the ledger panel is a live query over that table.</p>
+  <details><summary>the query that picks what the mistake-student studies next</summary><pre id="racesql"></pre></details>
 </section>
 
 <section id="act-scale" aria-disabled="true">

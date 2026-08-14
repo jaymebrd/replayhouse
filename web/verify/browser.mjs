@@ -65,7 +65,7 @@ async function main() {
       () => {
         const t = document.getElementById("racestat")?.textContent ?? "";
         const m = t.match(/step (\d+)/);
-        return m && Number(m[1]) >= 5 && t.includes("dB");
+        return m && Number(m[1]) >= 5 && t.includes("% sharp");
       },
       { timeout: TIMEOUT },
     );

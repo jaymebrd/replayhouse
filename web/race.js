@@ -310,8 +310,8 @@ async function startRace(srcCanvas) {
     ctx.fillStyle = "#14161a";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.font = "13px ui-monospace, Menlo, monospace";
-    [["rorig", "the photo"], ["runi", "uniform sampling"],
-     ["rpri", "prioritized replay"], ["rheat", "where it studies"]]
+    [["rorig", "the photo"], ["runi", "studies random pixels"],
+     ["rpri", "studies its mistakes"], ["rheat", "the mistake ledger"]]
       .forEach(([id, label], i) => {
         const x = GAP + i * (PANEL + GAP);
         ctx.imageSmoothingEnabled = false;
@@ -444,11 +444,11 @@ async function startRace(srcCanvas) {
         finishRace();
         return;
       }
+      const pct = (e) => Math.max(0, Math.min(100, Math.round((e.hard / FINISH_DB) * 100)));
       el("racestat").textContent =
-        `step ${step} · ${Math.round(samples / secs).toLocaleString()} samples/s ` +
-        `through the store · ${queries.toLocaleString()} queries · ` +
-        `sharpness of hardest pixels: uniform ${evalU.hard.toFixed(1)} dB vs ` +
-        `prioritized ${evalP.hard.toFixed(1)} dB (finish at ${FINISH_DB})`;
+        `step ${step} · ${Math.round(samples / secs).toLocaleString()} pixels/s drawn ` +
+        `from the table · ${queries.toLocaleString()} queries · blurriest patches: ` +
+        `random ${pct(evalU)}% sharp, mistake-led ${pct(evalP)}% — first to 100% wins`;
     } catch (err) {
       if (g !== gen) return;
       console.warn("race step failed:", err?.message ?? err);
@@ -464,11 +464,12 @@ async function startRace(srcCanvas) {
     let line;
     if (hitU && hitP) {
       const [win, lose, wName, lName] = hitP.secs <= hitU.secs
-        ? [hitP, hitU, "prioritized", "uniform"] : [hitU, hitP, "uniform", "prioritized"];
+        ? [hitP, hitU, "the mistake-student", "the random student"]
+        : [hitU, hitP, "the random student", "the mistake-student"];
       line = `🏁 ${wName} got every patch sharp in ${t(win)} — ${lName} needed ` +
         `${t(lose)} (${(lose.secs / win.secs).toFixed(1)}x longer)`;
     } else {
-      line = `🏁 time! prioritized ${t(hitP)} vs uniform ${t(hitU)}`;
+      line = `🏁 time! mistake-student ${t(hitP)} vs random student ${t(hitU)}`;
     }
     el("racestat").textContent =
       `${line} · ${samples.toLocaleString()} samples, ${queries.toLocaleString()} ` +
