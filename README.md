@@ -25,9 +25,7 @@ oldest, or drop lowest-priority). On a laptop, drawing 8192 trajectories
 from a 50M-row store takes about 1.1s ([measured](benchmarks/RESULTS.md));
 updating 8k priorities takes ~100ms.
 
-Status: early development, pre-PyPI. The
-[design doc](docs/superpowers/specs/2026-08-06-replayhouse-design.md) has
-the full data model.
+Status: early development, pre-PyPI.
 
 ## Quick start {#quick-start}
 
