@@ -56,8 +56,10 @@ el("load").onclick = async () => {
     // starts failing with CANNOT_SCHEDULE_TASK. Cap query threads and read synchronously.
     await store._exec(
       "SET max_threads = 4, max_insert_threads = 1, local_filesystem_read_method = 'pread'");
+    // optional chain: if a cached page and a newer script (or vice versa)
+    // straddle a deploy, a missing section must not kill the boot
     for (const s of ["act-mem", "act-race"])
-      el(s).setAttribute("aria-disabled", "false");
+      el(s)?.setAttribute("aria-disabled", "false");
     // A failed act module must not kill the other — but it must say so, not
     // leave a live-looking dead section.
     await import("./race.js").then((m) => m.initRace({ store }), (err) => {

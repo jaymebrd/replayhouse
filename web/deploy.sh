@@ -36,6 +36,22 @@ done
 wasm_bytes=$(wc -c < "$WT/engine/chdb.wasm")
 test "$wasm_bytes" -lt 104857600 || {
   echo "engine/chdb.wasm is $wasm_bytes bytes, over GitHub's 100 MiB push limit"; exit 1; }
+# Version-stamp our module graph so a browser can never mix cached files from
+# two deploys (GitHub Pages caches for ~10 min; that skew killed page boot once).
+SHA=$(git rev-parse --short HEAD)
+python3 - "$WT" "$SHA" << 'PYEOF'
+import re, sys, pathlib
+wt, sha = pathlib.Path(sys.argv[1]), sys.argv[2]
+own = re.compile(r'((?:from |import\()"\./(?:app|race|memory|net|gif|replayhouse)\.js)"')
+for f in list(wt.glob("*.js")) + [wt / "index.html"]:
+    s = f.read_text()
+    s = own.sub(rf'\1?v={sha}"', s)
+    s = s.replace('src="./app.js"', f'src="./app.js?v={sha}"')
+    s = s.replace('src="./coi-serviceworker.min.js"',
+                  f'src="./coi-serviceworker.min.js?v={sha}"')
+    f.write_text(s)
+PYEOF
+
 touch "$WT/.nojekyll"
 
 git -C "$WT" add -A
