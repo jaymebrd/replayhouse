@@ -59,19 +59,17 @@ async function main() {
     const drawstat = await page.$eval("#drawstat", (e) => e.textContent);
     console.log("drawstat:", drawstat);
 
-    // The first frame renders before any training step (ratio 0.00x) — wait for a
-    // real tick so this also proves the learning loop is alive.
+    // The race act trains through the store — wait for a handful of real steps
+    // with a PSNR readout so this proves the sample/update loop is alive.
     await page.waitForFunction(
       () => {
-        const m = (document.getElementById("frame")?.textContent ?? "")
-          .match(/\((\d+\.\d+)x\)/);
-        return m && Number(m[1]) > 0;
+        const t = document.getElementById("racestat")?.textContent ?? "";
+        const m = t.match(/step (\d+)/);
+        return m && Number(m[1]) >= 5 && t.includes("dB");
       },
       { timeout: TIMEOUT },
     );
-    const frame = await page.$eval("#frame", (e) => e.textContent);
-    const ratioMatch = frame.match(/\(([\d.]+x)\)/);
-    console.log("ratio:", ratioMatch ? ratioMatch[1] : "(not found)");
+    console.log("race:", await page.$eval("#racestat", (e) => e.textContent));
 
     if (pageErrors.length) {
       throw new Error(`page reported errors during a successful run: ${pageErrors.join(" | ")}`);

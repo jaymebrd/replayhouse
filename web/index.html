@@ -30,9 +30,15 @@
   .bar { color:var(--accent); }
   progress { width:100%; accent-color:var(--accent); }
   details summary { cursor:pointer; color:var(--dim); }
-  #drop { border:2px dashed #3a4048; border-radius:6px; padding:1.6rem;
+  #drop, #rdrop { border:2px dashed #3a4048; border-radius:6px; padding:1.6rem;
     text-align:center; color:var(--dim); }
-  #drop.hot { border-color:var(--accent); color:var(--ink); }
+  #drop.hot, #rdrop.hot { border-color:var(--accent); color:var(--ink); }
+  #rdrop { padding:.7rem; margin-top:.6rem; }
+  .race-row { display:flex; gap:.7rem; flex-wrap:wrap; margin:.4rem 0 .2rem; }
+  .race-row figure { margin:0; flex:1 1 140px; min-width:130px; text-align:center; }
+  .race-row canvas { width:100%; image-rendering:pixelated; background:#000;
+    border:1px solid var(--edge); border-radius:4px; }
+  .race-row figcaption { color:var(--dim); font-size:.8rem; padding-top:.25rem; }
   table { border-collapse:collapse; margin-top:.6rem; font-size:.85rem; }
   td, th { border:1px solid var(--edge); padding:.25rem .6rem; text-align:left;
     font-variant-numeric:tabular-nums; }
@@ -49,8 +55,28 @@
 </div>
 <progress id="dl" max="100" value="0" hidden></progress>
 
+<section id="act-race" aria-disabled="true">
+  <h2><span class="act">act 1</span>two identical learners race to paint a photo — one studies smarter</h2>
+  <div class="race-row">
+    <figure><canvas id="rorig" width="96" height="96"></canvas><figcaption>the photo</figcaption></figure>
+    <figure><canvas id="runi" width="96" height="96"></canvas><figcaption>uniform sampling</figcaption></figure>
+    <figure><canvas id="rpri" width="96" height="96"></canvas><figcaption>prioritized replay</figcaption></figure>
+    <figure><canvas id="rheat" width="96" height="96"></canvas><figcaption>where it studies (live query)</figcaption></figure>
+  </div>
+  <div class="row">
+    <button id="rpause" disabled>Pause</button>
+    <span id="racestat" class="dim"></span>
+  </div>
+  <div id="rdrop">drop your own photo here to race on it — it never leaves this tab</div>
+  <p class="dim">both nets get the same training budget; the only difference is which pixels
+  they pick to study. every batch is a weighted draw from a MergeTree table in this tab,
+  every per-pixel error is written back as a priority, and the heatmap is a live query
+  over the priority sidecar.</p>
+  <details><summary>the sampling query behind the prioritized learner</summary><pre id="racesql"></pre></details>
+</section>
+
 <section id="act-scale" aria-disabled="true">
-  <h2><span class="act">act 1</span>how fast is a weighted draw over N rows — in a tab?</h2>
+  <h2><span class="act">act 2</span>how fast is a weighted draw over N rows — in a tab?</h2>
   <div class="row">
     <button data-n="100000" disabled>100k rows</button>
     <button data-n="1000000" disabled>1M rows</button>
@@ -67,7 +93,7 @@
 </section>
 
 <section id="act-data" aria-disabled="true">
-  <h2><span class="act">act 2</span>your data, sampled the same way — locally</h2>
+  <h2><span class="act">act 3</span>your data, sampled the same way — locally</h2>
   <div id="drop">drop a .csv or .parquet here (it is read into the in-page engine, never uploaded)</div>
   <div class="row" id="datactl" hidden>
     <label for="wcol">weight by</label>
@@ -76,16 +102,6 @@
     <span id="datamsg" class="dim"></span>
   </div>
   <div id="dataout"></div>
-</section>
-
-<section id="act-learn" aria-disabled="true">
-  <h2><span class="act">act 3</span>why a training loop wants this: watch focus emerge</h2>
-  <pre id="frame">engine idle</pre>
-  <div class="row">
-    <button id="mode" disabled>Switch to uniform [u]</button>
-    <button id="pause" disabled>Pause [space]</button>
-    <button id="reset" disabled>Reset</button>
-  </div>
 </section>
 
 <footer>every number on this page comes from a ClickHouse query that ran in this tab.
