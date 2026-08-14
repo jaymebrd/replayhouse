@@ -2,6 +2,9 @@ import { Store } from "./replayhouse.js";
 import { initBench } from "./bench.js";
 
 export const el = (id) => document.getElementById(id);
+// One demo act drives the engine at a time: starting an act calls the previous
+// act's stop hook, then installs its own.
+export const stage = { stop: null };
 export const fmtMs = (x) => x >= 1000 ? `${(x / 1000).toFixed(2)}s` : `${Math.round(x)}ms`;
 
 async function resolveBase() {
@@ -54,7 +57,7 @@ el("load").onclick = async () => {
     // starts failing with CANNOT_SCHEDULE_TASK. Cap query threads and read synchronously.
     await store._exec(
       "SET max_threads = 4, max_insert_threads = 1, local_filesystem_read_method = 'pread'");
-    for (const s of ["act-race", "act-scale", "act-data"])
+    for (const s of ["act-mem", "act-race", "act-scale", "act-data"])
       el(s).setAttribute("aria-disabled", "false");
     initBench({ store, conn });
     // A failed act module must not kill the others — but it must say so, not
@@ -62,6 +65,10 @@ el("load").onclick = async () => {
     await import("./race.js").then((m) => m.initRace({ store }), (err) => {
       console.error(err);
       el("racestat").textContent = `this act failed to load: ${err?.message ?? err}`;
+    });
+    await import("./memory.js").then((m) => m.initMemory({ store }), (err) => {
+      console.error(err);
+      el("memstat").textContent = `this act failed to load: ${err?.message ?? err}`;
     });
     await import("./data.js").then((m) => m.initData({ db, store }), (err) => {
       console.error(err);

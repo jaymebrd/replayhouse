@@ -59,8 +59,16 @@ async function main() {
     const drawstat = await page.$eval("#drawstat", (e) => e.textContent);
     console.log("drawstat:", drawstat);
 
-    // The race act trains through the store — wait for a handful of real steps
-    // with a PSNR readout so this proves the sample/update loop is alive.
+    // Act 1 (memory/spotlight) autostarts — wait for real steps through the
+    // store: experiences inserted and both students evaluated.
+    await page.waitForFunction(
+      () => /% sharp/.test(document.getElementById("memstat")?.textContent ?? ""),
+      { timeout: TIMEOUT },
+    );
+    console.log("memory:", await page.$eval("#memstat", (e) => e.textContent));
+
+    // Act 2 (the race) starts on click, taking the stage from act 1.
+    await page.click("#rpause");
     await page.waitForFunction(
       () => {
         const t = document.getElementById("racestat")?.textContent ?? "";

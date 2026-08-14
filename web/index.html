@@ -22,9 +22,9 @@
   button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   button[disabled] { opacity:.45; cursor:default; }
   button.big { font-size:1.05rem; padding:.6rem 1.3rem; border-color:var(--accent); }
-  #rgif { background:#24282e; color:var(--accent); border:1px solid #343a42;
+  #rgif, #mgif { background:#24282e; color:var(--accent); border:1px solid #343a42;
     border-radius:5px; padding:.45rem .9rem; text-decoration:none; }
-  #rgif:hover { border-color:var(--accent); }
+  #rgif:hover, #mgif:hover { border-color:var(--accent); }
   .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin:.5rem 0; }
   .stat { font-size:1.5rem; } .stat b { color:var(--accent); }
   .dim { color:var(--dim); font-size:.85rem; }
@@ -58,8 +58,30 @@
 </div>
 <progress id="dl" max="100" value="0" hidden></progress>
 
+<section id="act-mem" aria-disabled="true">
+  <h2><span class="act">act 1</span>an agent lives each moment once — this is why replay buffers exist</h2>
+  <p class="dim" style="margin:.2rem 0 .8rem">The spotlight is the present. It sweeps across the
+  photo once and never comes back. <b>One student can only study what is happening right now.
+  The other records every moment into a ClickHouse table — a replay buffer — and studies its
+  memories.</b> Watch what happens to the first student's past as the spotlight moves on.</p>
+  <div class="race-row">
+    <figure><canvas id="mstream" width="96" height="96"></canvas><figcaption>the stream (the present)</figcaption></figure>
+    <figure><canvas id="mnow" width="96" height="96"></canvas><figcaption>no buffer — lives in the moment</figcaption></figure>
+    <figure><canvas id="mmem" width="96" height="96"></canvas><figcaption>replay buffer — remembers</figcaption></figure>
+    <figure><canvas id="mbuf" width="96" height="96"></canvas><figcaption>the buffer, filling up (live)</figcaption></figure>
+  </div>
+  <div class="row">
+    <button id="mreplay" disabled>Restart the stream</button>
+    <a id="mgif" hidden download="replayhouse-stream.gif">Download the stream as a GIF</a>
+    <span id="memstat" class="dim"></span>
+  </div>
+  <p class="dim">forgetting is not a metaphor here: both students update the same way — the
+  no-buffer one simply cannot see data that is gone. the buffer is a real MergeTree table that
+  grows as moments are lived, and the replay batches are weighted draws from it.</p>
+</section>
+
 <section id="act-race" aria-disabled="true">
-  <h2><span class="act">act 1</span>two identical students race to paint a photo</h2>
+  <h2><span class="act">act 2</span>two identical students race to paint a photo</h2>
   <p class="dim" style="margin:.2rem 0 .8rem">Both start knowing nothing and learn by practicing
   a batch of pixels at a time. <b>One picks pixels at random. The other keeps a ledger of its
   mistakes</b> — in a ClickHouse table running inside this tab — and asks it for the pixels it got
@@ -87,7 +109,7 @@
 </section>
 
 <section id="act-scale" aria-disabled="true">
-  <h2><span class="act">act 2</span>how fast is a weighted draw over N rows — in a tab?</h2>
+  <h2><span class="act">act 3</span>how fast is a weighted draw over N rows — in a tab?</h2>
   <div class="row">
     <button data-n="100000" disabled>100k rows</button>
     <button data-n="1000000" disabled>1M rows</button>
@@ -104,7 +126,7 @@
 </section>
 
 <section id="act-data" aria-disabled="true">
-  <h2><span class="act">act 3</span>your data, sampled the same way — locally</h2>
+  <h2><span class="act">act 4</span>your data, sampled the same way — locally</h2>
   <div id="drop">drop a .csv or .parquet here (it is read into the in-page engine, never uploaded)</div>
   <div class="row" id="datactl" hidden>
     <label for="wcol">weight by</label>
