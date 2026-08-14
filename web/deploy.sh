@@ -13,15 +13,19 @@ git worktree add "$WT" gh-pages 2>/dev/null || {
   git -C "$WT" rm -rf --quiet . 2>/dev/null || true
 }
 
-rm -rf "$WT"/{index.html,app.js,bench.js,data.js,learn.js,replayhouse.js,engine}
+rm -rf "$WT"/{index.html,app.js,bench.js,data.js,learn.js,replayhouse.js,engine,coi-serviceworker.min.js}
 cp web/index.html web/app.js web/bench.js web/data.js web/learn.js web/replayhouse.js "$WT/"
-mkdir -p "$WT/engine/st"
-cp web/node_modules/chdb-wasm/dist/*.js "$WT/engine/"          # glue: index/async/status/platform/bindings/worker/protocol
-cp -R web/node_modules/chdb-wasm/dist/st/. "$WT/engine/st/"    # st bundle, nested as selectBundle expects
-# Deliberately NOT copying dist/chdb.mjs + dist/chdb.wasm (mt bundle) — GitHub Pages cannot serve COOP/COEP
-# headers, so selectBundle will never use the mt bundle. Keeps gh-pages 99MB lighter and still functional.
+cp web/coi-serviceworker.min.js "$WT/"
+mkdir -p "$WT/engine"
+cp web/node_modules/chdb-wasm/dist/*.js "$WT/engine/"                          # glue: index/async/status/platform/bindings/worker/protocol
+cp web/node_modules/chdb-wasm/dist/chdb.mjs web/node_modules/chdb-wasm/dist/chdb.wasm "$WT/engine/"  # mt bundle lives at dist root
+# Real-browser testing showed the st (single-threaded) bundle can't run MergeTree at all
+# (CANNOT_SCHEDULE_TASK on CREATE TABLE) — so we ship mt-only. GitHub Pages can't set the
+# COOP/COEP headers mt needs, so coi-serviceworker.min.js (vendored above) shims cross-origin
+# isolation client-side via a one-time reload. selectBundle's mt path is `${base}/chdb.mjs`,
+# i.e. no st/ nesting.
 # Sanity check: the deployed page must be able to boot
-for f in engine/index.js engine/async.js engine/platform.js engine/st/chdb.mjs engine/st/chdb.wasm; do
+for f in engine/index.js engine/async.js engine/platform.js engine/chdb.mjs engine/chdb.wasm coi-serviceworker.min.js; do
   test -f "$WT/$f" || { echo "engine bundle incomplete: missing $f"; exit 1; }
 done
 touch "$WT/.nojekyll"

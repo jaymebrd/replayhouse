@@ -15,6 +15,16 @@ async function resolveBase() {
 el("load").onclick = async () => {
   el("load").disabled = true;
   el("loadmsg").textContent = "resolving bundle…";
+  // coi-serviceworker installs on first visit and reloads the page to take effect;
+  // on very old browsers (or file://) it can't establish isolation at all — the mt
+  // bundle needs SharedArrayBuffer + crossOriginIsolated, so bail out clearly here
+  // rather than letting selectBundle silently fall back / fail deep inside AsyncChdb.
+  if (!self.crossOriginIsolated) {
+    el("loadmsg").textContent =
+      "this page needs cross-origin isolation for the multi-threaded engine — serve it over HTTP";
+    el("load").disabled = false;
+    return;
+  }
   try {
     const base = await resolveBase();
     const { AsyncChdb, selectBundle } = await import(`${base}/index.js`);
@@ -30,12 +40,20 @@ el("load").onclick = async () => {
     const wasmUrl = bundle.wasmUrl ? new URL(bundle.wasmUrl, location.href).href : undefined;
     const db = await AsyncChdb.create({
       moduleUrl, wasmUrl,
-      onProgress: (l, t) => { el("dl").value = (l / t) * 100; },
+      onProgress: (l, t) => {
+        const pct = (l / t) * 100;
+        if (Number.isFinite(pct)) el("dl").value = pct;
+      },
     });
     el("dl").hidden = true;
     el("loadmsg").textContent = "engine ready — a full ClickHouse is now running on this page";
     const conn = await db.connect();
     const store = await Store.open(conn);
+    // the wasm pthread pool is finite; defaults (max_threads = hardwareConcurrency,
+    // pread_threadpool async reads) exhaust it under concurrent queries and everything
+    // starts failing with CANNOT_SCHEDULE_TASK. Cap query threads and read synchronously.
+    await store._exec(
+      "SET max_threads = 4, max_insert_threads = 1, local_filesystem_read_method = 'pread'");
     for (const s of ["act-scale", "act-data", "act-learn"])
       el(s).setAttribute("aria-disabled", "false");
     initBench({ store, conn });

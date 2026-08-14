@@ -9,7 +9,11 @@ createServer(async (req, res) => {
     .replace(/\/$/, "/index.html");
   try {
     const body = await readFile(path === "." ? "index.html" : path);
-    res.writeHead(200, { "content-type": TYPES[extname(path)] ?? "application/octet-stream" });
+    res.writeHead(200, {
+      "content-type": TYPES[extname(path)] ?? "application/octet-stream",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    });
     res.end(body);
   } catch { res.writeHead(404); res.end("not found"); }
 }).listen(8099, () => console.log("http://localhost:8099"));

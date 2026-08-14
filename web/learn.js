@@ -11,7 +11,7 @@ const N = 2000, BATCH = 256, BINS = 10, SPARK = "▁▂▃▄▅▆▇█";
 let store, state, timer;
 
 async function reset() {
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
   state = { step: 0, mode: "prioritized", paused: false, losses: [], w: [0, 0], b: 0 };
   await store._exec("DROP TABLE IF EXISTS demo");
   await store._exec("DROP TABLE IF EXISTS demo__priorities");
@@ -24,7 +24,21 @@ async function reset() {
   el("mode").textContent = "Switch to uniform [u]";
   el("pause").textContent = "Pause [space]";
   await render(new Set());
-  timer = setInterval(step, 140);
+  timer = setTimeout(loop, 140);
+}
+
+// Self-scheduling instead of setInterval: a step is several engine queries and can
+// outlast the 140ms cadence — overlapping ticks would pile up unboundedly on the
+// single engine queue and starve the other acts' queries.
+async function loop() {
+  const t0 = performance.now();
+  try {
+    if (!state.paused) await step();
+  } catch (err) {
+    // e.g. a step in flight while reset() drops the tables — keep the loop alive
+    console.warn("learn step failed:", err?.message ?? err);
+  }
+  timer = setTimeout(loop, Math.max(20, 140 - (performance.now() - t0)));
 }
 
 async function step() {
