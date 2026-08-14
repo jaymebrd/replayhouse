@@ -145,7 +145,7 @@ async function startRace(srcCanvas) {
 
   function captureFrame(caption) {
     const { c, ctx, PANEL, GAP } = rec;
-    ctx.fillStyle = "#f5efe7";
+    ctx.fillStyle = "#f1f2ee";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.font = "13px ui-monospace, Menlo, monospace";
     [["rorig", "the photo"], ["runi", "studies random pixels"],
@@ -154,7 +154,7 @@ async function startRace(srcCanvas) {
         const x = GAP + i * (PANEL + GAP);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(el(id), x, GAP, PANEL, PANEL);
-        ctx.fillStyle = "#6b6558";
+        ctx.fillStyle = "#5d6660";
         ctx.textAlign = "center";
         ctx.fillText(label, x + PANEL / 2, GAP + PANEL + 16);
       });
