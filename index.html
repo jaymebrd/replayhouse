@@ -3,8 +3,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ReplayHouse — a ClickHouse replay buffer in your browser tab</title>
 <style>
-  :root { --bg:#f5efe7; --ink:#1b1a16; --dim:#6b6558; --accent:#b65515;
-    --accent-soft:#e8863f; --hair:#e0d6c6; --well:#ede5d8; }
+  :root { --bg:#f1f2ee; --ink:#15181a; --dim:#5d6660; --accent:#b65515;
+    --accent-soft:#e8863f; --hair:#d7dcd3; --well:#e6e9e2; }
   * { box-sizing:border-box; }
   body { background:var(--bg); color:var(--ink); margin:0;
     font:17px/1.65 Newsreader, Georgia, "Times New Roman", serif;
@@ -21,8 +21,8 @@
   .hero { text-align:center; padding:5.5rem 0 4rem; }
   .kicker { font:12px/1 "Avenir Next", Jost, Futura, "Helvetica Neue", sans-serif;
     letter-spacing:.34em; text-transform:uppercase; color:var(--dim); margin:0 0 2.2rem; }
-  h1 { font:400 clamp(2.6rem, 8.5vw, 6rem)/1.05 "Avenir Next", Jost, Futura,
-    "Helvetica Neue", sans-serif; letter-spacing:.14em; text-transform:uppercase;
+  h1 { font:500 clamp(2.6rem, 8.5vw, 6rem)/1.05 "Avenir Next", Jost, Futura,
+    "Helvetica Neue", sans-serif; letter-spacing:.1em; text-transform:uppercase;
     margin:0 0 2rem; }
   h1 b { font-weight:400; color:var(--accent); }
   .lede { font-style:italic; font-size:1.25rem; color:var(--ink); max-width:38em;
@@ -71,7 +71,7 @@
     padding:.9rem 1.1rem; overflow-x:auto; white-space:pre; margin:.6rem 0 0;
     font:12.5px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   details summary { cursor:pointer; color:var(--dim); font-style:italic; }
-  #drop, #rdrop { border:1px dashed #b7ab99; border-radius:4px; padding:1.4rem;
+  #drop, #rdrop { border:1px dashed #a7b0a6; border-radius:4px; padding:1.4rem;
     text-align:center; color:var(--dim); font-style:italic; }
   #drop.hot, #rdrop.hot { border-color:var(--accent); color:var(--ink); }
   #rdrop { padding:.8rem; margin-top:.9rem; }
