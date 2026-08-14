@@ -24,10 +24,18 @@ cp web/node_modules/chdb-wasm/dist/chdb.mjs web/node_modules/chdb-wasm/dist/chdb
 # COOP/COEP headers mt needs, so coi-serviceworker.min.js (vendored above) shims cross-origin
 # isolation client-side via a one-time reload. selectBundle's mt path is `${base}/chdb.mjs`,
 # i.e. no st/ nesting.
-# Sanity check: the deployed page must be able to boot
-for f in engine/index.js engine/async.js engine/platform.js engine/chdb.mjs engine/chdb.wasm coi-serviceworker.min.js; do
+# Sanity check: the deployed page must be able to boot (worker.js/bindings.js/status.js
+# are the worker-side chain — AsyncChdb spawns worker.js, which imports the others)
+for f in engine/index.js engine/async.js engine/platform.js engine/worker.js \
+         engine/bindings.js engine/status.js engine/chdb.mjs engine/chdb.wasm \
+         coi-serviceworker.min.js; do
   test -f "$WT/$f" || { echo "engine bundle incomplete: missing $f"; exit 1; }
 done
+# GitHub hard-rejects files >= 100 MiB; chdb.wasm sits ~0.7 MiB under that today,
+# so an engine-version bump can silently cross the line — fail loudly instead.
+wasm_bytes=$(wc -c < "$WT/engine/chdb.wasm")
+test "$wasm_bytes" -lt 104857600 || {
+  echo "engine/chdb.wasm is $wasm_bytes bytes, over GitHub's 100 MiB push limit"; exit 1; }
 touch "$WT/.nojekyll"
 
 git -C "$WT" add -A

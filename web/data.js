@@ -19,7 +19,7 @@ export function initData({ db, store }) {
     const f = e.dataTransfer.files?.[0];
     if (!f) return;
     const ext = f.name.split(".").pop().toLowerCase();
-    fmt = FMT[ext];
+    fmt = Object.hasOwn(FMT, ext) ? FMT[ext] : null;
     if (!fmt) { el("datamsg").textContent = "csv, parquet, or jsonl please"; return; }
     path = `/drop.${ext}`;
     await db.putFile(path, new Uint8Array(await f.arrayBuffer()));

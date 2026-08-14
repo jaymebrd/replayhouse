@@ -8,9 +8,14 @@ import { el } from "./app.js";
 // string ("easy"/"hard"); no user-supplied text ever reaches this frame.
 
 const N = 2000, BATCH = 256, BINS = 10, SPARK = "▁▂▃▄▅▆▇█";
-let store, state, timer;
+let store, state, timer, gen = 0;
 
 async function reset() {
+  // clearTimeout alone can't stop a loop that is mid-step (its timer already
+  // fired) — it would reschedule itself after this reset started its own loop,
+  // leaking one extra concurrent loop per reset. The generation counter makes
+  // stale loops (and their pending priority writes) die on their next check.
+  const g = ++gen;
   if (timer) clearTimeout(timer);
   state = { step: 0, mode: "prioritized", paused: false, losses: [], w: [0, 0], b: 0 };
   await store._exec("DROP TABLE IF EXISTS demo");
@@ -24,27 +29,31 @@ async function reset() {
   el("mode").textContent = "Switch to uniform [u]";
   el("pause").textContent = "Pause [space]";
   await render(new Set());
-  timer = setTimeout(loop, 140);
+  if (g !== gen) return;
+  timer = setTimeout(() => loop(g), 140);
 }
 
 // Self-scheduling instead of setInterval: a step is several engine queries and can
 // outlast the 140ms cadence — overlapping ticks would pile up unboundedly on the
 // single engine queue and starve the other acts' queries.
-async function loop() {
+async function loop(g) {
+  if (g !== gen) return;
   const t0 = performance.now();
   try {
-    if (!state.paused) await step();
+    if (!state.paused) await step(g);
   } catch (err) {
     // e.g. a step in flight while reset() drops the tables — keep the loop alive
     console.warn("learn step failed:", err?.message ?? err);
   }
-  timer = setTimeout(loop, Math.max(20, 140 - (performance.now() - t0)));
+  if (g !== gen) return;
+  timer = setTimeout(() => loop(g), Math.max(20, 140 - (performance.now() - t0)));
 }
 
-async function step() {
+async function step(g) {
   if (state.paused) return;
   const by = state.mode === "prioritized" ? "priority" : "1";
   const { ids, rows } = await store.sample("demo", BATCH, { by });
+  if (g !== gen) return; // reset() happened underneath us — don't write stale priorities
   let loss = 0;
   const errs = [];
   const lr = 0.05;

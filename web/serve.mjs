@@ -7,6 +7,9 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript",
 createServer(async (req, res) => {
   const path = join(".", decodeURIComponent(new URL(req.url, "http://x").pathname))
     .replace(/\/$/, "/index.html");
+  // decodeURIComponent runs after URL dot-segment normalization, so %2F-encoded
+  // ".." can survive into `path` — refuse anything escaping the web root.
+  if (path.split("/").includes("..")) { res.writeHead(404); res.end("not found"); return; }
   try {
     const body = await readFile(path === "." ? "index.html" : path);
     res.writeHead(200, {

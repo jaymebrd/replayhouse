@@ -57,10 +57,16 @@ el("load").onclick = async () => {
     for (const s of ["act-scale", "act-data", "act-learn"])
       el(s).setAttribute("aria-disabled", "false");
     initBench({ store, conn });
-    const { initData } = await import("./data.js").catch(() => ({ initData: null }));
-    if (initData) initData({ db, store });
-    const { initLearn } = await import("./learn.js").catch(() => ({ initLearn: null }));
-    if (initLearn) initLearn({ store });
+    // A failed act module must not kill the others — but it must say so, not
+    // leave a live-looking dead section.
+    await import("./data.js").then((m) => m.initData({ db, store }), (err) => {
+      console.error(err);
+      el("datamsg").textContent = `this act failed to load: ${err?.message ?? err}`;
+    });
+    await import("./learn.js").then((m) => m.initLearn({ store }), (err) => {
+      console.error(err);
+      el("frame").textContent = `this act failed to load: ${err?.message ?? err}`;
+    });
   } catch (err) {
     el("loadmsg").textContent = `failed to load the engine: ${err?.message ?? err}`;
     el("load").disabled = false;

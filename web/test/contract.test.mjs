@@ -65,5 +65,17 @@ await test("rapid last-write-wins via monotonic versions", async () => {
   });
 });
 
+await test("large draws chunk the phase-2 fetch", async () => {
+  // k > 4000 forces multiple IN-list fetches — inlining all ids in one query
+  // blows the default 256KB max_query_size (mirrors Python's _FETCH_CHUNK).
+  await store.create("exp3", { reward: "Float32" });
+  await store.insert("exp3",
+    Array.from({ length: 4500 }, (_, i) => ({ reward: i / 4500, priority: 1.0 })));
+  const { ids, rows } = await store.sample("exp3", 4200);
+  assert.equal(ids.length, 4200);
+  assert.equal(new Set(ids).size, 4200);
+  assert.equal(rows.length, 4200);
+});
+
 await conn.close();
 await db.terminate();

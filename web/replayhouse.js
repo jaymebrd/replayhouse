@@ -1,5 +1,7 @@
 // The ReplayHouse SQL contract, mirrored in JS over chdb-wasm.
-// Byte-compatible with src/replayhouse/sampling.py's queries — the point:
+// Query-shape compatible with src/replayhouse/sampling.py (same key formulas,
+// exclusions, and validation; whitespace differs, and create() skips the Python
+// client's PARTITION BY / COMMENT — playground tables are ephemeral). The point:
 // ReplayHouse is a SQL contract; clients are thin.
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -101,8 +103,14 @@ export class Store {
     const ids = (await this.query(phase1)).map((r) => r.id);
     if (!ids.length) return { ids: [], rows: [] };
     for (const id of ids) if (!UUID_RE.test(id)) throw new Error(`not a UUID: ${id}`);
-    const rows = await this.query(
-      `SELECT * FROM \`${name}\` WHERE id IN (${ids.map((i) => `'${i}'`).join(",")})`);
+    // 8k inline UUIDs ≈ 310KB, over the default 256KB max_query_size — fetch in
+    // chunks, mirroring the Python client's _FETCH_CHUNK in table.py.
+    const rows = [];
+    for (let i = 0; i < ids.length; i += 4000) {
+      const chunk = ids.slice(i, i + 4000);
+      rows.push(...await this.query(
+        `SELECT * FROM \`${name}\` WHERE id IN (${chunk.map((x) => `'${x}'`).join(",")})`));
+    }
     return { ids: rows.map((r) => r.id), rows };
   }
 
