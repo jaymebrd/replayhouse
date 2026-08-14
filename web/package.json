@@ -1,0 +1,15 @@
+{
+  "name": "replayhouse-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "serve": "node serve.mjs",
+    "verify:browser": "node verify/browser.mjs"
+  },
+  "devDependencies": {
+    "chdb-wasm": "^0.3.0",
+    "coi-serviceworker": "^0.1.7",
+    "puppeteer-core": "^25.5.0"
+  }
+}

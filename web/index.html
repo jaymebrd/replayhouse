@@ -1,0 +1,96 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReplayHouse — a ClickHouse replay buffer in your browser tab</title>
+<style>
+  :root { --bg:#14161a; --panel:#101215; --ink:#e8eaed; --dim:#9aa3ad;
+    --accent:#e8863f; --edge:#2a2e34; }
+  body { background:var(--bg); color:var(--ink); margin:0;
+    font:15px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    padding:2.2rem 1rem 4rem; display:flex; flex-direction:column; align-items:center; }
+  main { width:min(84ch, 94vw); }
+  h1 { font-size:1.25rem; margin:0 0 .25rem; } h1 b { color:var(--accent); }
+  .sub { color:var(--dim); margin:0 0 1.4rem; font-size:.9rem; }
+  section { border:1px solid var(--edge); border-radius:6px; background:var(--panel);
+    padding:1.1rem 1.3rem; margin:0 0 1.3rem; }
+  section[aria-disabled="true"] { opacity:.45; pointer-events:none; }
+  h2 { font-size:.95rem; margin:0 0 .7rem; }
+  h2 .act { color:var(--accent); margin-right:.5ch; }
+  button { background:#24282e; color:var(--ink); border:1px solid #343a42;
+    border-radius:5px; padding:.45rem .9rem; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button[disabled] { opacity:.45; cursor:default; }
+  button.big { font-size:1.05rem; padding:.6rem 1.3rem; border-color:var(--accent); }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin:.5rem 0; }
+  .stat { font-size:1.5rem; } .stat b { color:var(--accent); }
+  .dim { color:var(--dim); font-size:.85rem; }
+  pre { background:#0c0e11; border:1px solid var(--edge); border-radius:5px;
+    padding:.8rem 1rem; overflow-x:auto; white-space:pre; margin:.6rem 0 0; }
+  .bar { color:var(--accent); }
+  progress { width:100%; accent-color:var(--accent); }
+  details summary { cursor:pointer; color:var(--dim); }
+  #drop { border:2px dashed #3a4048; border-radius:6px; padding:1.6rem;
+    text-align:center; color:var(--dim); }
+  #drop.hot { border-color:var(--accent); color:var(--ink); }
+  table { border-collapse:collapse; margin-top:.6rem; font-size:.85rem; }
+  td, th { border:1px solid var(--edge); padding:.25rem .6rem; text-align:left;
+    font-variant-numeric:tabular-nums; }
+  footer { color:var(--dim); font-size:.8rem; margin-top:1rem; max-width:84ch; }
+  footer a { color:var(--accent); }
+</style>
+<main>
+<h1><b>ReplayHouse</b> — a ClickHouse replay buffer in your browser tab</h1>
+<p class="sub">real MergeTree tables, real weighted sampling — the OLAP engine is WebAssembly running on this page. nothing leaves your machine.</p>
+
+<div class="row">
+  <button id="load" class="big">Load the engine (~99 MB, cached after first visit)</button>
+  <span id="loadmsg" class="dim"></span>
+</div>
+<progress id="dl" max="100" value="0" hidden></progress>
+
+<section id="act-scale" aria-disabled="true">
+  <h2><span class="act">act 1</span>how fast is a weighted draw over N rows — in a tab?</h2>
+  <div class="row">
+    <button data-n="100000" disabled>100k rows</button>
+    <button data-n="1000000" disabled>1M rows</button>
+    <button data-n="5000000" disabled>5M rows</button>
+    <button data-n="10000000" disabled>10M rows</button>
+    <span id="genmsg" class="dim"></span>
+  </div>
+  <div class="row">
+    <button id="draw" class="big" disabled>Sample 8,192 (weighted, without replacement)</button>
+  </div>
+  <div class="stat" id="drawstat"></div>
+  <p class="dim">measured in your browser just now — nothing precomputed.</p>
+  <details><summary>the query that just ran</summary><pre id="drawsql"></pre></details>
+</section>
+
+<section id="act-data" aria-disabled="true">
+  <h2><span class="act">act 2</span>your data, sampled the same way — locally</h2>
+  <div id="drop">drop a .csv or .parquet here (it is read into the in-page engine, never uploaded)</div>
+  <div class="row" id="datactl" hidden>
+    <label for="wcol">weight by</label>
+    <select id="wcol"></select>
+    <button id="dsample">Weighted sample 10</button>
+    <span id="datamsg" class="dim"></span>
+  </div>
+  <div id="dataout"></div>
+</section>
+
+<section id="act-learn" aria-disabled="true">
+  <h2><span class="act">act 3</span>why a training loop wants this: watch focus emerge</h2>
+  <pre id="frame">engine idle</pre>
+  <div class="row">
+    <button id="mode" disabled>Switch to uniform [u]</button>
+    <button id="pause" disabled>Pause [space]</button>
+    <button id="reset" disabled>Reset</button>
+  </div>
+</section>
+
+<footer>every number on this page comes from a ClickHouse query that ran in this tab.
+engine: <a href="https://github.com/chdb-io/chdb">chdb</a> compiled to WebAssembly ·
+library: <a href="https://github.com/jaymebrd/replayhouse">replayhouse</a></footer>
+</main>
+<script src="./coi-serviceworker.min.js"></script>
+<script type="module" src="./app.js"></script>
