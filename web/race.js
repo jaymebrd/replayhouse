@@ -11,7 +11,7 @@ const RES = 96, N = RES * RES, BATCH = 1024, SUB = 256, FEATS = 96, HID = 64;
 const FDIM = FEATS * 2, LR = 2e-3, PRIO_FLOOR = 0.003;
 // The finish line: a learner is done when its worst-decile pixels are sharp
 // (this is what the eye judges — aggregate PSNR is dominated by easy pixels).
-const FINISH_DB = 22, STEP_CAP = 900;
+const FINISH_DB = 22, STEP_CAP = 900, TIME_CAP_S = 150;
 
 // ---------- deterministic init ----------
 function mulberry32(a) {
@@ -229,9 +229,9 @@ function defaultScene() {
   x.beginPath(); x.moveTo(0, RES * 0.92); x.quadraticCurveTo(RES * 0.6, RES * 0.78, RES, RES * 0.94);
   x.lineTo(RES, RES); x.lineTo(0, RES); x.fill();
   x.fillStyle = "#fff";
-  x.font = "bold 15px sans-serif";
-  x.fillText("Replay", 6, 22);
-  x.fillText("House", 6, 39);
+  x.font = `bold ${Math.round(RES * 0.16)}px sans-serif`;
+  x.fillText("Replay", RES * 0.06, RES * 0.23);
+  x.fillText("House", RES * 0.06, RES * 0.41);
   return c;
 }
 
@@ -269,7 +269,9 @@ async function startRace(srcCanvas) {
     rows.push({ x: p % RES, y: Math.floor(p / RES),
       r: target[p * 3], g: target[p * 3 + 1], b: target[p * 3 + 2], priority: 1.0 });
   }
-  await store.insert("photo", rows);
+  // ids come back in row order, so pixelIds[p] is pixel p's row id — this is
+  // what lets the brush write priorities for exact pixels
+  const pixelIds = await store.insert("photo", rows);
   if (g !== gen) return;
 
   el("racesql").textContent =
@@ -403,10 +405,46 @@ async function startRace(srcCanvas) {
     } finally { heatBusy = false; }
   }
 
+  // --- the brush: click/drag any panel to mark "study this now" — a real
+  // priority write; the next weighted draw floods with those pixels and the
+  // patch snaps into focus. The learner's own error write-backs then take
+  // over again, so the boost self-corrects once the region is mastered.
+  const brush = { pending: new Set(), dragging: false };
+  function brushAt(canvas, ev) {
+    const rect = canvas.getBoundingClientRect();
+    const bx = Math.floor(((ev.clientX - rect.left) / rect.width) * RES);
+    const by = Math.floor(((ev.clientY - rect.top) / rect.height) * RES);
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        if (dx * dx + dy * dy > 9) continue;
+        const x = bx + dx, y = by + dy;
+        if (x < 0 || x >= RES || y < 0 || y >= RES) continue;
+        const p = y * RES + x;
+        brush.pending.add(p);
+        prioView[p] = Math.max(prioView[p], 5); // instant ledger echo; the next
+      }                                          // live query overwrites with truth
+    }
+  }
+  for (const id of ["rorig", "rpri", "rheat"]) {
+    const c = el(id);
+    c.style.cursor = "crosshair";
+    c.onpointerdown = (ev) => { brush.dragging = true; brushAt(c, ev); ev.preventDefault(); };
+    c.onpointermove = (ev) => { if (brush.dragging) brushAt(c, ev); };
+  }
+  addEventListener("pointerup", () => { brush.dragging = false; });
+
   paint();
   while (g === gen && !done) {
     if (paused) { await new Promise((r) => setTimeout(r, 120)); continue; }
     try {
+      if (brush.pending.size) {
+        const ps = [...brush.pending];
+        brush.pending.clear();
+        await store.updatePriorities("photo",
+          ps.map((p) => pixelIds[p]), ps.map(() => 8.0));
+        queries += 1;
+        window.__brushFlushed = (window.__brushFlushed ?? 0) + ps.length;
+      }
       const [u, p] = await Promise.all([
         store.sample("photo", BATCH, { by: "1" }),
         store.sample("photo", BATCH, { by: "priority" }),
@@ -440,7 +478,7 @@ async function startRace(srcCanvas) {
         store._exec("OPTIMIZE TABLE photo__priorities FINAL")
           .then(() => { queries += 1; }, () => {});
       }
-      if ((hitU && hitP) || step >= STEP_CAP) {
+      if ((hitU && hitP) || step >= STEP_CAP || secs > TIME_CAP_S) {
         finishRace();
         return;
       }
@@ -460,7 +498,7 @@ async function startRace(srcCanvas) {
     done = true;
     paint();
     refreshHeat();
-    const t = (h) => (h ? `${h.secs.toFixed(0)}s` : `not sharp by step ${STEP_CAP}`);
+    const t = (h) => (h ? `${h.secs.toFixed(0)}s` : "didn't finish");
     let line;
     if (hitU && hitP) {
       const [win, lose, wName, lName] = hitP.secs <= hitU.secs
