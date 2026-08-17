@@ -2,9 +2,12 @@
 
 Experience replay on ClickHouse.
 
-replayhouse stores experiences — agent trajectories, transitions, scored
-rollouts — and samples weighted training batches from them. It is a small
-Python client over ClickHouse: a server for scale, or
+replayhouse is a replay buffer — the experience store used in
+reinforcement learning and, increasingly, LLM post-training. It holds
+experiences (agent trajectories, transitions, scored rollouts) and samples
+weighted training batches from them, with prioritized replay built in:
+training errors are written back as priorities and steer the next draw.
+It is a small Python client over ClickHouse — a server for scale, or
 [chdb](https://github.com/chdb-io/chdb) embedded in-process for local work
 with no infrastructure. It borrows the shape of
 [Reverb](https://github.com/google-deepmind/reverb) and replaces the replay
