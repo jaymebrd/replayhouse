@@ -79,7 +79,11 @@ implemented as an Efraimidis–Spirakis top-k in plain SQL, so it parallelizes
 across cores and distributes across shards. `by` accepts any SQL expression
 over the row (`"priority"`, `"reward + 0.01"`, `"abs(advantage)"`), `where`
 filters the population, `stratify_by` balances groups, and `seed` makes a
-draw reproducible. Rows with non-positive weight are never drawn.
+draw reproducible. Rows with non-positive weight are never drawn. The same
+draw also works as a decision policy, not just batch selection: for
+multi-armed bandit problems, sample arms in proportion to estimated reward
+and write observed outcomes back as priorities
+([`examples/bandit.py`](examples/bandit.py)).
 
 **Eviction.** TTL by insertion time, plus capacity policies: `oldest` or
 `lowest_priority`, by row count or bytes. `evict()` also removes orphaned
@@ -136,9 +140,11 @@ prioritized and uniform sampling. Re-record with `vhs examples/demo.tape`.
   over the rows the trainer samples.
 - [`examples/quickstart.ipynb`](examples/quickstart.ipynb) — the API as a
   notebook.
-- [`examples/bandit.py`](examples/bandit.py),
-  [`examples/train_reward_model.py`](examples/train_reward_model.py) —
-  single-file demos.
+- [`examples/bandit.py`](examples/bandit.py) — a multi-armed bandit where
+  the store is the policy: arms are drawn in proportion to their priority,
+  and observed rewards flow back as priority updates.
+- [`examples/train_reward_model.py`](examples/train_reward_model.py) —
+  prioritized-replay training of a small reward model.
 
 ## Browser playground
 
