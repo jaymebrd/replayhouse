@@ -91,11 +91,11 @@
 <main>
 
 <div class="hero">
-  <p class="kicker">an experience store · running entirely in this tab</p>
+  <p class="kicker">a replay buffer, running entirely in this tab</p>
   <h1>Replay<b>House</b></h1>
-  <p class="lede">A replay buffer that is just a database. The full ClickHouse engine runs
-  as WebAssembly on this page — real tables, real weighted sampling, real training loops.
-  Nothing leaves your machine.</p>
+  <p class="lede">A replay buffer that's just a database. This page runs the full ClickHouse
+  engine as WebAssembly, and the two demos below train small neural networks against it,
+  live. Nothing is uploaded anywhere.</p>
   <div class="row">
     <button id="load" class="cta">Load the engine — 99 MB, cached after first visit</button>
   </div>
@@ -105,54 +105,55 @@
 
 <section id="act-mem" aria-disabled="true">
   <p class="label"><b>01</b> — memory</p>
-  <h2>Forgetting is the <em>default</em>.</h2>
-  <p class="intro">The spotlight is the present. It sweeps across the photo once and never
-  comes back. <b>One student can only study what is happening right now. The other records
-  every moment into a ClickHouse table — a replay buffer — and studies its memories.</b>
-  Watch what happens to the first student's past as the spotlight moves on.</p>
+  <h2>Why replay buffers exist</h2>
+  <p class="intro">The spotlight sweeps across the photo once. Two identical networks try to
+  learn it. One can only train on what's under the spotlight right now. The other writes
+  every pixel it sees into a ClickHouse table — a replay buffer — and trains on samples from
+  the whole table. As the spotlight moves on, the first network starts losing regions it had
+  already learned.</p>
   <div class="race-row">
-    <figure><canvas id="mstream" width="96" height="96"></canvas><figcaption>the stream (the present)</figcaption></figure>
-    <figure><canvas id="mnow" width="96" height="96"></canvas><figcaption>no buffer — lives in the moment</figcaption></figure>
-    <figure><canvas id="mmem" width="96" height="96"></canvas><figcaption>replay buffer — remembers</figcaption></figure>
-    <figure><canvas id="mbuf" width="96" height="96"></canvas><figcaption>the buffer, filling up (live)</figcaption></figure>
+    <figure><canvas id="mstream" width="96" height="96"></canvas><figcaption>the stream</figcaption></figure>
+    <figure><canvas id="mnow" width="96" height="96"></canvas><figcaption>no buffer</figcaption></figure>
+    <figure><canvas id="mmem" width="96" height="96"></canvas><figcaption>with a replay buffer</figcaption></figure>
+    <figure><canvas id="mbuf" width="96" height="96"></canvas><figcaption>the buffer (live)</figcaption></figure>
   </div>
   <div class="row">
     <button id="mreplay" disabled>Restart the stream</button>
     <a id="mgif" hidden download="replayhouse-stream.gif">Download the stream as a GIF</a>
     <span id="memstat" class="mono dim"></span>
   </div>
-  <p class="note">forgetting is not a metaphor here: both students update the same way — the
-  no-buffer one simply cannot see data that is gone. the buffer is a real MergeTree table that
-  grows as moments are lived, and the replay batches are weighted draws from it.</p>
+  <p class="note">both networks train identically; the only difference is what data they can
+  reach. the buffer is a real MergeTree table that grows as pixels are revealed, and the
+  replay batches are weighted samples from it.</p>
 </section>
 
 <section id="act-race" aria-disabled="true">
   <p class="label"><b>02</b> — priorities</p>
-  <h2>Studying mistakes is <em>faster</em>.</h2>
-  <p class="intro">Two identical students race to paint a photo, a batch of pixels at a time.
-  <b>One picks pixels at random. The other keeps a ledger of its mistakes</b> — in a ClickHouse
-  table running inside this tab — and asks it for the pixels it got most wrong. Same brain,
-  same effort. First to get every patch sharp wins.</p>
+  <h2>Why sample by priority</h2>
+  <p class="intro">Two identical networks learn to paint the same photo with the same number
+  of training batches. One samples pixels uniformly at random. The other keeps a per-pixel
+  error score in a ClickHouse table and samples the pixels it currently gets most wrong.
+  First to get every patch of the image sharp wins.</p>
   <div class="race-row">
     <figure><canvas id="rorig" width="96" height="96"></canvas><figcaption>the photo</figcaption></figure>
-    <figure><canvas id="runi" width="96" height="96"></canvas><figcaption>studies random pixels</figcaption></figure>
-    <figure><canvas id="rpri" width="96" height="96"></canvas><figcaption>studies its mistakes</figcaption></figure>
-    <figure><canvas id="rheat" width="96" height="96"></canvas><figcaption>the mistake ledger (live)</figcaption></figure>
+    <figure><canvas id="runi" width="96" height="96"></canvas><figcaption>uniform sampling</figcaption></figure>
+    <figure><canvas id="rpri" width="96" height="96"></canvas><figcaption>priority sampling</figcaption></figure>
+    <figure><canvas id="rheat" width="96" height="96"></canvas><figcaption>error scores (live)</figcaption></figure>
   </div>
   <div class="row">
     <button id="rpause" disabled>Start the race</button>
     <a id="rgif" hidden download="replayhouse-race.gif">Download the race as a GIF</a>
     <span id="racestat" class="mono dim"></span>
   </div>
-  <p class="note"><b>you can interfere:</b> click or drag on the photo (or the ledger) to mark
-  a region "study this now" — the brush is a real priority write, the next batch floods with
-  those pixels, and you'll watch that patch snap into focus.</p>
-  <div id="rdrop">drop your own photo here to race on it — it never leaves this tab</div>
-  <p class="note">nothing is simulated: each practice batch is a weighted draw from a real
-  MergeTree table (this loop is prioritized experience replay — what RL and LLM post-training
-  runs do with agent experiences instead of pixels), every error is written back as a
-  priority, and the ledger panel is a live query over that table.</p>
-  <details><summary>the query that picks what the mistake-student studies next</summary><pre id="racesql"></pre></details>
+  <p class="note">you can interfere: click or drag on the photo (or the score panel) to bump
+  those pixels' priorities — a real write to the table. the next batches fill up with them
+  and that patch sharpens first.</p>
+  <div id="rdrop">drop a photo here to run the race on it — processed locally, never uploaded</div>
+  <p class="note">nothing is simulated: every batch is a weighted draw from a MergeTree table
+  in this tab, every error is written back as a priority, and the score panel is a live query
+  over that table. this is the same loop RL and LLM post-training use, with pixels standing
+  in for experiences.</p>
+  <details><summary>the sampling query</summary><pre id="racesql"></pre></details>
 </section>
 
 </main>

@@ -176,8 +176,8 @@ async function startStream() {
     ctx.fillStyle = "#f1f2ee";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.font = "13px ui-monospace, Menlo, monospace";
-    [["mstream", "the stream (the present)"], ["mnow", "no buffer"],
-     ["mmem", "replay buffer"], ["mbuf", "the buffer, filling up"]]
+    [["mstream", "the stream"], ["mnow", "no buffer"],
+     ["mmem", "with a replay buffer"], ["mbuf", "the buffer"]]
       .forEach(([id, label], i) => {
         const x = GAP + i * (PANEL + GAP);
         ctx.imageSmoothingEnabled = false;
@@ -224,30 +224,29 @@ async function startStream() {
       paint(lo);
       if (now - rec.last >= rec.intervalMs) {
         rec.last = now;
-        captureFrame(`replayhouse — an experience stream · t=${secs.toFixed(0)}s · ` +
-          `${stored.toLocaleString()} memories in the buffer`);
+        captureFrame(`replayhouse — experience stream · t=${secs.toFixed(0)}s · ` +
+          `${stored.toLocaleString()} rows in the buffer`);
       }
       if (now - lastHeat > 1000) { lastHeat = now; refreshHeat(); }
       if (streamLive) {
         el("memstat").textContent =
-          `the present: columns ${lo}–${inserted} · ${stored.toLocaleString()} ` +
-          `experiences stored · of everything lived so far: no-buffer ` +
-          `${pctNow}% sharp, replay ${pctMem}%`;
+          `spotlight at columns ${lo}–${inserted} · ${stored.toLocaleString()} ` +
+          `rows stored · sharp so far: no buffer ${pctNow}%, replay ${pctMem}%`;
       } else {
         codaAt = codaAt ?? now;
         el("memstat").textContent =
-          `the stream has ended — replay is still studying its memories · ` +
-          `no-buffer ${pctNow}% sharp, replay ${pctMem}%`;
+          `stream finished — the replay network keeps training from the buffer · ` +
+          `no buffer ${pctNow}%, replay ${pctMem}%`;
         if (now - codaAt > CODA_MS) {
           done = true;
           evalNets();
           paint(lo);
-          const line = `🏁 the stream is over: replay holds ${pctMem}% of the photo ` +
-            `sharp — the no-buffer student kept ${pctNow}% and can never revisit the rest`;
+          const line = `finished: replay ends at ${pctMem}% sharp, no buffer at ` +
+            `${pctNow}%. the stream data is gone — only the buffer still has it`;
           el("memstat").textContent =
-            `${line} · ${stored.toLocaleString()} experiences, ` +
-            `${queries.toLocaleString()} real queries`;
-          captureFrame(line.replace(/^🏁 /, ""));
+            `${line} · ${stored.toLocaleString()} rows, ` +
+            `${queries.toLocaleString()} queries`;
+          captureFrame(line);
           setTimeout(() => {
             const bytes = assemble(rec.frames, { delayCs: 12, holdCs: 300 });
             const a = el("mgif");

@@ -47,7 +47,7 @@ async function main() {
     // Act 1 (memory/spotlight) autostarts — wait for real steps through the
     // store: experiences inserted and both students evaluated.
     await page.waitForFunction(
-      () => /% sharp/.test(document.getElementById("memstat")?.textContent ?? ""),
+      () => /sharp so far/.test(document.getElementById("memstat")?.textContent ?? ""),
       { timeout: TIMEOUT },
     );
     console.log("memory:", await page.$eval("#memstat", (e) => e.textContent));
