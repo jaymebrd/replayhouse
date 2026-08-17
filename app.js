@@ -1,4 +1,4 @@
-import { Store } from "./replayhouse.js?v=ae55d46";
+import { Store } from "./replayhouse.js?v=442bdaf";
 
 export const el = (id) => document.getElementById(id);
 // One demo act drives the engine at a time: starting an act calls the previous
@@ -70,11 +70,11 @@ el("load").onclick = async () => {
       el(s)?.setAttribute("aria-disabled", "false");
     // A failed act module must not kill the other — but it must say so, not
     // leave a live-looking dead section.
-    await import("./race.js?v=ae55d46").then((m) => m.initRace({ store }), (err) => {
+    await import("./race.js?v=442bdaf").then((m) => m.initRace({ store }), (err) => {
       console.error(err);
       el("racestat").textContent = `this act failed to load: ${err?.message ?? err}`;
     });
-    await import("./memory.js?v=ae55d46").then((m) => m.initMemory({ store }), (err) => {
+    await import("./memory.js?v=442bdaf").then((m) => m.initMemory({ store }), (err) => {
       console.error(err);
       el("memstat").textContent = `this act failed to load: ${err?.message ?? err}`;
     });

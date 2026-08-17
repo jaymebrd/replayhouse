@@ -1,6 +1,6 @@
-import { el, stage } from "./app.js?v=ae55d46";
-import { quantize, assemble } from "./gif.js?v=ae55d46";
-import { RES, N, BATCH, makeNet, forward, trainRows } from "./net.js?v=ae55d46";
+import { el, stage } from "./app.js?v=442bdaf";
+import { quantize, assemble } from "./gif.js?v=442bdaf";
+import { RES, N, BATCH, makeNet, forward, trainRows } from "./net.js?v=442bdaf";
 
 // The hero act: two identical neural nets race to paint a photo, pixel by pixel.
 // One draws its training batches uniformly, the other by error priority — and
@@ -148,8 +148,8 @@ async function startRace(srcCanvas) {
     ctx.fillStyle = "#f1f2ee";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.font = "13px ui-monospace, Menlo, monospace";
-    [["rorig", "the photo"], ["runi", "studies random pixels"],
-     ["rpri", "studies its mistakes"], ["rheat", "the mistake ledger"]]
+    [["rorig", "the photo"], ["runi", "uniform sampling"],
+     ["rpri", "priority sampling"], ["rheat", "error scores"]]
       .forEach(([id, label], i) => {
         const x = GAP + i * (PANEL + GAP);
         ctx.imageSmoothingEnabled = false;
@@ -320,9 +320,9 @@ async function startRace(srcCanvas) {
       }
       const pct = (e) => Math.max(0, Math.min(100, Math.round((e.hard / FINISH_DB) * 100)));
       el("racestat").textContent =
-        `step ${step} · ${Math.round(samples / secs).toLocaleString()} pixels/s drawn ` +
-        `from the table · ${queries.toLocaleString()} queries · blurriest patches: ` +
-        `random ${pct(evalU)}% sharp, mistake-led ${pct(evalP)}% — first to 100% wins`;
+        `step ${step} · ${Math.round(samples / secs).toLocaleString()} pixels/s ` +
+        `from the table · ${queries.toLocaleString()} queries · worst patches: ` +
+        `uniform ${pct(evalU)}% sharp, priority ${pct(evalP)}% — first to 100%`;
     } catch (err) {
       if (g !== gen) return;
       console.warn("race step failed:", err?.message ?? err);
@@ -338,19 +338,19 @@ async function startRace(srcCanvas) {
     let line;
     if (hitU && hitP) {
       const [win, lose, wName, lName] = hitP.secs <= hitU.secs
-        ? [hitP, hitU, "the mistake-student", "the random student"]
-        : [hitU, hitP, "the random student", "the mistake-student"];
-      line = `🏁 ${wName} got every patch sharp in ${t(win)} — ${lName} needed ` +
+        ? [hitP, hitU, "priority sampling", "uniform sampling"]
+        : [hitU, hitP, "uniform sampling", "priority sampling"];
+      line = `${wName} got every patch sharp in ${t(win)}; ${lName} took ` +
         `${t(lose)} (${(lose.secs / win.secs).toFixed(1)}x longer)`;
     } else {
-      line = `🏁 time! mistake-student ${t(hitP)} vs random student ${t(hitU)}`;
+      line = `time: priority sampling ${t(hitP)}, uniform ${t(hitU)}`;
     }
     el("racestat").textContent =
-      `${line} · ${samples.toLocaleString()} samples, ${queries.toLocaleString()} ` +
-      `real queries through the store`;
+      `${line} · ${samples.toLocaleString()} samples, ` +
+      `${queries.toLocaleString()} queries`;
     el("rpause").textContent = "Race again";
     el("rpause").onclick = () => startRace(srcCanvas);
-    captureFrame(line.replace(/^🏁 /, ""));
+    captureFrame(line);
     setTimeout(() => { // let the verdict paint before the ~1s encode
       const bytes = assemble(rec.frames, { delayCs: 12, holdCs: 300 });
       const a = el("rgif");
